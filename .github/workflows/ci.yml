@@ -3,8 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+  # No branch filter: the delivery workflow is stacked, so a PR's base is
+  # another feature branch, not main. Filtering on `main` would leave every
+  # stacked PR unchecked until the bottom of the stack merges.
   pull_request:
-    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,7 +14,7 @@ concurrency:
 
 env:
   NODE_VERSION: "23"
-  PYTHON_VERSION: "3.11"
+  PYTHON_VERSION: "3.13"
   PNPM_VERSION: "10.34.9"
 
 jobs:
@@ -95,7 +97,7 @@ jobs:
 
       - name: Typecheck
         working-directory: apps/api
-        run: uv run mypy app
+        run: uv run mypy server tests
 
   api-lint:
     name: Lint (api)
@@ -113,7 +115,7 @@ jobs:
         run: uv sync --frozen
       - name: Ruff
         working-directory: apps/api
-        run: uv run ruff check app tests
+        run: uv run ruff check server tests
 
   migrations-check:
     name: Migrations apply cleanly
