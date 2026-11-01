@@ -2,25 +2,28 @@
 
 ## Phase 1: Foundation
 
-- [ ] Task 1: Scaffold the monorepo (`apps/web`, `apps/api`, `packages/shared`)
+- [x] Task 1: Scaffold the monorepo (`apps/web`, `apps/api`, `packages/shared`)
   - Acceptance: `pnpm install` and `uv sync` both succeed; root `typecheck` runs
-  - Verify: `pnpm typecheck`
+  - Verify: `pnpm typecheck` — PASS, verified from a clean clone of main on 2026-11-02
   - Files: `apps/web/package.json`, `apps/web/tsconfig.json`, `apps/api/pyproject.toml`, `packages/shared/package.json`
   - Scope: Medium
 
-- [ ] Task 2: Establish the env contract and boundary rules
+- [x] Task 2: Establish the env contract and boundary rules
   - Acceptance: `.env.example` for both apps; documented list of which vars are browser-safe; lint rule forbids `service_role` in `NEXT_PUBLIC_`
-  - Verify: `pnpm lint` catches a `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` assignment
-  - Files: `.env.example`, `apps/web/lib/env.ts`, `.eslintrc`
+  - Verify: `pnpm lint` catches a `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` assignment — PASS, four injected violations produced four errors
+  - Files: `.env.example`, `apps/web/src/lib/env.ts`, `apps/web/eslint.config.mjs`
   - Scope: Medium
 
-- [ ] Task 3: CI pipeline green
+- [x] Task 3: CI pipeline green
   - Acceptance: workflow runs typecheck, lint, build, pytest, policy tests, secret scan
-  - Verify: workflow file parses; every job references an existing script or directory
+  - Verify: workflow file parses; every job references an existing script or directory — PASS, 8 jobs green on main
   - Files: `.github/workflows/ci.yml`
   - Scope: Medium
 
-- [ ] Checkpoint: fresh clone runs `pnpm typecheck` and `uv run pytest` clean, CI green
+- [x] Checkpoint: fresh clone runs `pnpm typecheck` and `uv run pytest` clean, CI green
+  - Verified from `git clone --depth 1 --branch main` on 2026-11-02:
+    `pnpm install --frozen-lockfile` OK, `pnpm typecheck` OK (3 workspace projects),
+    `pnpm lint` OK, `pnpm build` OK, `pytest` 2 passed, `ruff` OK, `mypy` 6 files OK.
 
 ## Phase 2: Data model
 
