@@ -1,0 +1,51 @@
+[project]
+name = "teammate-api"
+version = "0.1.0"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "fastapi",
+    "asyncpg",
+    "workers-py",
+    "workers-runtime-sdk",
+    "pydantic",
+    "pydantic-settings",
+    "python-ulid",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+    "mypy",
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "RUF"]
+
+[tool.mypy]
+strict = true
+python_version = "3.13"
+warn_unreachable = true
+disallow_untyped_decorators = false
+explicit_package_bases = true
+
+# `workers` exists only inside the Cloudflare Workers runtime and has no stubs
+# in a host venv. Scoped to that module rather than globally, so a genuinely
+# untyped import elsewhere still fails.
+[[tool.mypy.overrides]]
+module = "workers.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+# `uv run pytest` runs in an isolated venv without the project root on
+# sys.path, so `import server` fails there even when it works with a local
+# `python -m pytest`.
+pythonpath = ["."]

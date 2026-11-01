@@ -3,8 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+  # No branch filter: the delivery workflow is stacked, so a PR's base is
+  # another feature branch, not main. Filtering on `main` would leave every
+  # stacked PR unchecked until the bottom of the stack merges.
   pull_request:
-    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,8 +14,8 @@ concurrency:
 
 env:
   NODE_VERSION: "23"
-  PYTHON_VERSION: "3.11"
-  PNPM_VERSION: "10.9.2"
+  PYTHON_VERSION: "3.13"
+  PNPM_VERSION: "10.34.9"
 
 jobs:
   web-typecheck:
@@ -95,7 +97,7 @@ jobs:
 
       - name: Typecheck
         working-directory: apps/api
-        run: uv run mypy app
+        run: uv run mypy server tests
 
   api-lint:
     name: Lint (api)
@@ -113,33 +115,37 @@ jobs:
         run: uv sync --frozen
       - name: Ruff
         working-directory: apps/api
-        run: uv run ruff check app tests
+        run: uv run ruff check server tests
 
   migrations-check:
     name: Migrations apply cleanly
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: supabase/postgres:15.1.0.117
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
     steps:
       - uses: actions/checkout@v4
-      - name: Apply migrations in order
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      # Migrations reference the auth schema, which only exists inside Supabase.
+      # Applying them against a plain Postgres fails on the first foreign key.
+      - name: Start local Supabase
+        run: supabase start
+      # `supabase db reset` drops the local database and rebuilds it from the
+      # migrations directory, which is exactly the deploy path this job exists to
+      # verify. It takes no --db-url; it reads the config written by `supabase
+      # start`. It also clears the reused volume, which is what makes a rerun
+      # idempotent instead of failing on "relation already exists".
+      - name: Apply migrations against a clean database
+        run: supabase db reset --debug
+
+      - name: Verify schema objects were created
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          DATABASE_URL: postgresql://postgres:postgres@localhost:54322/postgres
         run: |
-          for f in $(ls supabase/migrations/*.sql | sort); do
-            echo "Applying $f"
-            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
-          done
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
+            select count(*) from information_schema.tables
+            where table_schema = 'public' and table_name in
+              ('workspaces','workspace_members','boards','lists','cards',
+               'comments','activity_events','card_presence');"
 
   policy-tests:
     name: RLS policy tests
@@ -173,7 +179,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # A shallow clone of depth 2 is enough to diff the PR head against
+          # its base, and avoids the action's default full-history behavior.
+          fetch-depth: 2
+
+      - name: Install gitleaks
+        run: |
+          VERSION=8.24.3
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      # Called directly rather than through the gitleaks action, which treats
+      # gitleaks exit code 2 as an action error. Exit 2 means "invalid commit
+      # range", and it fires on any PR whose base commit has no parent.
       - name: Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gitleaks detect --redact -v --exit-code 1 --log-opts=--no-merges --report-path results.sarif --report-format sarif 2>&1 | tee gitleaks.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -eq 1 ]; then
+            echo "::error::Gitleaks found secrets in the working tree"
+            exit 1
+          fi

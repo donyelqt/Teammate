@@ -6,6 +6,16 @@ begin;
 
 create schema if not exists tests;
 
+-- The suite switches to the authenticated role mid-test, so it needs access to
+-- its own helpers and to the tables whose policies it asserts. Without these
+-- grants the run fails with "permission denied" instead of an assertion, which
+-- would be a false green on the boundary this suite exists to check.
+grant usage on schema public, tests, auth to authenticated;
+grant execute on all functions in schema public, tests, auth to authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant select on all tables in schema auth to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+
 -- Fixture identities, matching what supabase_auth would create.
 insert into auth.users (id, email, instance_id, aud, role, encrypted_password, created_at, updated_at)
 values
@@ -43,6 +53,7 @@ begin
   if not condition then
     raise exception 'POLICY TEST FAILED: %', message;
   end if;
+end;
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -58,6 +69,12 @@ do $$
 declare
   ws uuid := 'aaaaaaaa-0000-0000-0000-000000000001';
 begin
+  -- Ordering invariant: the creator must join as owner before any other
+  -- member, because workspace_members_insert only allows a member to add
+  -- someone when an owner already exists. This is the real product flow.
+  insert into workspace_members (workspace_id, user_id, role)
+  values (ws, '11111111-1111-1111-1111-111111111111', 'owner');
+
   insert into workspace_members (workspace_id, user_id, role) values (ws, '22222222-2222-2222-2222-222222222222', 'member');
 
   insert into boards (id, workspace_id, name, created_by)
@@ -119,10 +136,16 @@ $$;
 -- 3. A non-member cannot write.
 -- ---------------------------------------------------------------------------
 do $$
+declare
+  affected integer;
 begin
   perform tests.as_user('33333333-3333-3333-3333-333333333333');
   perform set_config('role', 'authenticated', true);
 
+  -- A blocked INSERT raises. A blocked UPDATE or DELETE does not: RLS filters
+  -- the visible rows first, so the statement succeeds while matching zero rows.
+  -- Assert on the row count in every case, because that is what a
+  -- misconfigured policy would show either way.
   begin
     insert into boards (workspace_id, name, created_by)
     values ('aaaaaaaa-0000-0000-0000-000000000001', 'Injected', auth.uid());
@@ -131,19 +154,27 @@ begin
     when insufficient_privilege then null;
   end;
 
-  begin
-    update cards set title = 'Hijacked';
-    raise exception 'POLICY TEST FAILED: outsider updated a card';
-  exception
-    when insufficient_privilege then null;
-  end;
+  update cards set title = 'Hijacked';
+  get diagnostics affected = row_count;
+  if affected <> 0 then
+    raise exception 'POLICY TEST FAILED: outsider updated % card(s)', affected;
+  end if;
 
-  begin
-    delete from cards;
-    raise exception 'POLICY TEST FAILED: outsider deleted a card';
-  exception
-    when insufficient_privilege then null;
-  end;
+  delete from cards;
+  get diagnostics affected = row_count;
+  if affected <> 0 then
+    raise exception 'POLICY TEST FAILED: outsider deleted % card(s)', affected;
+  end if;
+
+  -- Confirm the card still exists and is unmodified. Read it back as the
+  -- owner: the outsider cannot see the row at all, so their own SELECT would
+  -- return null and prove nothing.
+  perform tests.as_user('11111111-1111-1111-1111-111111111111');
+  if (select title from cards
+      where id = 'dddddddd-0000-0000-0000-000000000001')
+     is distinct from 'Wire the board shell' then
+    raise exception 'POLICY TEST FAILED: original title changed';
+  end if;
 end;
 $$;
 
@@ -155,15 +186,15 @@ insert into workspace_members (workspace_id, user_id, role)
 values ('aaaaaaaa-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333', 'viewer');
 
 do $$
+declare
+  n bigint;
+  affected integer;
 begin
   perform tests.as_user('33333333-3333-3333-3333-333333333333');
 
   -- Can read.
-  declare n bigint;
-  begin
-    select count(*) into n from cards;
-    if n = 0 then raise exception 'POLICY TEST FAILED: viewer cannot read cards'; end if;
-  end;
+  select count(*) into n from cards;
+  if n = 0 then raise exception 'POLICY TEST FAILED: viewer cannot read cards'; end if;
 
   -- Cannot create.
   begin
@@ -174,13 +205,18 @@ begin
     when insufficient_privilege then null;
   end;
 
-  -- Cannot edit.
-  begin
-    update cards set title = 'Viewer rewrite';
-    raise exception 'POLICY TEST FAILED: viewer updated a card';
-  exception
-    when insufficient_privilege then null;
-  end;
+  -- Cannot edit. RLS shows the viewer zero rows, so the UPDATE matches none.
+  update cards set title = 'Viewer rewrite';
+  get diagnostics affected = row_count;
+  if affected <> 0 then
+    raise exception 'POLICY TEST FAILED: viewer updated % card(s)', affected;
+  end if;
+
+  -- The card count must be unchanged too.
+  select count(*) into n from cards;
+  if n <> 1 then
+    raise exception 'POLICY TEST FAILED: viewer changed the card count to %', n;
+  end if;
 end;
 $$;
 
@@ -188,22 +224,22 @@ $$;
 -- 5. A member can write but cannot escalate their own role or delete workspace.
 -- ---------------------------------------------------------------------------
 do $$
+declare
+  affected integer;
 begin
   perform tests.as_user('22222222-2222-2222-2222-222222222222');
 
-  begin
-    update workspace_members set role = 'owner' where user_id = auth.uid();
+  update workspace_members set role = 'owner' where user_id = auth.uid();
+  get diagnostics affected = row_count;
+  if affected <> 0 then
     raise exception 'POLICY TEST FAILED: member escalated self to owner';
-  exception
-    when insufficient_privilege then null;
-  end;
+  end if;
 
-  begin
-    delete from workspaces;
+  delete from workspaces;
+  get diagnostics affected = row_count;
+  if affected <> 0 then
     raise exception 'POLICY TEST FAILED: member deleted the workspace';
-  exception
-    when insufficient_privilege then null;
-  end;
+  end if;
 end;
 $$;
 
@@ -249,13 +285,35 @@ begin
 end;
 $$;
 
-select tests.as_user('33333333-3333-3333-3333-333333333333');
+-- The outsider was added as a viewer in section 4, so by this point reading
+-- the workspace's activity is correct behavior. The genuine non-member case is
+-- asserted in section 2, before that promotion, so it is not repeated here.
+-- What this block checks instead is that a viewer's visibility is read-only in
+-- the activity log as well, and that the log actually has rows.
+select tests.as_user('22222222-2222-2222-2222-222222222222');
 do $$
 declare
   n bigint;
 begin
   select count(*) into n from activity_events;
-  if n <> 0 then raise exception 'POLICY TEST FAILED: outsider reads activity'; end if;
+  if n = 0 then raise exception 'POLICY TEST FAILED: activity log is empty'; end if;
+end;
+$$;
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+do $$
+declare
+  n bigint;
+begin
+  -- A user who never joined the workspace sees nothing.
+  select count(*) into n from activity_events;
+  if n <> 0 then raise exception 'POLICY TEST FAILED: non-member reads activity'; end if;
+
+  select count(*) into n from boards;
+  if n <> 0 then raise exception 'POLICY TEST FAILED: non-member reads boards'; end if;
+
+  select count(*) into n from cards;
+  if n <> 0 then raise exception 'POLICY TEST FAILED: non-member reads cards'; end if;
 end;
 $$;
 
