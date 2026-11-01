@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* Design tokens (ADR-0009). Teal primary, orange accent, zinc neutrals.
+   Kept semantic so both themes resolve from one set of variables. */
+@theme {
+  --color-primary: #0d9488;
+  --color-primary-foreground: #f0fdfa;
+  --color-accent: #ea580c;
+  --color-accent-foreground: #fff7ed;
+  --color-surface: #f9fafb;
+  --color-surface-foreground: #18181b;
+  --color-border: #d4d4d8;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-surface-foreground);
+  font-family: var(--font-sans);
+}
