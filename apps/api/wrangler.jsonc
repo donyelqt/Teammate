@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "teammate-api",
+  "main": "src/main.py",
+  "compatibility_date": "2026-10-31",
+  "compatibility_flags": ["python_workers"],
+
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "<HYPERDRIVE_CONFIG_ID>"
+    }
+  ],
+
+  "vars": {
+    "LOG_LEVEL": "INFO"
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}

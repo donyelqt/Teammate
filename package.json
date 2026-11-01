@@ -1,0 +1,18 @@
+{
+  "name": "teammate",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.9.2",
+  "scripts": {
+    "dev": "pnpm --filter @teammate/web dev & pnpm --filter @teammate/api dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "db:migrate": "supabase db push --link",
+    "db:seed": "supabase db seed"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^22.0.0"
+  }
+}
