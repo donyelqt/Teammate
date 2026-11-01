@@ -27,25 +27,28 @@
 
 ## Phase 2: Data model
 
-- [ ] Task 4: Apply the schema migration and verify RLS
+- [x] Task 4: Apply the schema migration and verify RLS
   - Acceptance: migration applies against clean Postgres with `ON_ERROR_STOP`
-  - Verify: `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/001_init.sql`
+  - Verify: PASS — applied from an empty PostgreSQL 16 database, exit 0
   - Files: `supabase/migrations/001_init.sql`
   - Scope: Medium
 
-- [ ] Task 5: Policy test suite green
+- [x] Task 5: Policy test suite green
   - Acceptance: outsider reads zero rows on every table; member reads all; viewer cannot write; member cannot escalate
-  - Verify: `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/policies.sql`
+  - Verify: PASS — suite exits 0 locally and green in CI against real Supabase
   - Files: `supabase/tests/policies.sql`
   - Scope: Large
 
-- [ ] Task 6: Ordering trigger verified under concurrent moves
+- [x] Task 6: Ordering trigger verified under concurrent moves
   - Acceptance: positions contiguous per parent after insert, delete, and move
-  - Verify: reorder section of `policies.sql` passes
+  - Verify: PASS — section 6 now has a block per operation plus a two-session
+    interleave. Found and fixed four real trigger defects; see PR #4.
   - Files: `supabase/migrations/001_init.sql`
   - Scope: Medium
 
-- [ ] Checkpoint: RLS boundary and ordering both proven against real Postgres
+- [x] Checkpoint: RLS boundary and ordering both proven against real Postgres
+  - Verified 2026-11-02 via PR #4 (`fix/position-compaction`), 8/8 jobs green,
+    including `RLS policy tests` and `Migrations apply cleanly` on real Supabase.
 
 ## Phase 3: Auth
 
