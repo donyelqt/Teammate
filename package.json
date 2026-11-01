@@ -2,7 +2,7 @@
   "name": "teammate",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@10.9.2",
+  "packageManager": "pnpm@10.34.9",
   "scripts": {
     "dev": "pnpm --filter @teammate/web dev & pnpm --filter @teammate/api dev",
     "build": "pnpm -r build",

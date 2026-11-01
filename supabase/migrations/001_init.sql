@@ -1,4 +1,16 @@
-create type workspace_role as enum ('owner', 'admin', 'member', 'viewer');
+-- Supabase tracks applied migrations, but the CI service container can outlive
+-- a run, so this stays re-runnable. Postgres has no `create type if not exists`.
+do $$
+begin
+  if not exists (
+    select 1 from pg_type t
+    join pg_namespace n on n.oid = t.typnamespace
+    where t.typname = 'workspace_role' and n.nspname = 'public'
+  ) then
+    create type workspace_role as enum ('owner', 'admin', 'member', 'viewer');
+  end if;
+end
+$$ language plpgsql;
 
 create table workspaces (
   id uuid primary key default gen_random_uuid(),
