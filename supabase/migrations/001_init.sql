@@ -183,6 +183,41 @@ begin
 end;
 $$;
 
+create or replace function compact_positions(
+  target_table text,
+  parent_col text,
+  parent_val uuid,
+  anchor_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Ranks rows by position, breaking ties in favour of the row that triggered
+  -- the compaction, then created_at. A row moved into an occupied slot takes
+  -- that slot rather than sorting behind it, which is the behaviour a drag
+  -- implies. Ranking by created_at alone handed the slot to whichever row was
+  -- older and stranded the card the user moved.
+  execute format(
+    'with ranked as (
+       select id, row_number() over (
+                order by position,
+                         (id = %1$L) desc,
+                         created_at
+              ) - 1 as pos
+       from %2$I where %3$I = $1
+     )
+     update %2$I t set position = r.pos
+     from ranked r where t.id = r.id and t.position <> r.pos',
+    anchor_id::text,
+    target_table,
+    parent_col
+  ) using parent_val;
+end;
+$$;
+
 create or replace function reorder_positions()
 returns trigger
 language plpgsql
@@ -192,38 +227,67 @@ as $$
 declare
   parent_col text;
   parent_val uuid;
+  old_val uuid;
+  anchor_id uuid;
 begin
-  if tg_table_name = 'boards' then
-    parent_col := 'workspace_id';
-    parent_val := new.workspace_id;
-  elsif tg_table_name = 'lists' then
-    parent_col := 'board_id';
-    parent_val := new.board_id;
-  elsif tg_table_name = 'cards' then
-    parent_col := 'list_id';
-    parent_val := new.list_id;
-  else
-    parent_col := 'workspace_id';
-    parent_val := new.workspace_id;
+  -- The compaction UPDATE writes to the same table this trigger fires on, so it
+  -- re-fires this function. Only the outermost invocation does the work.
+  if pg_trigger_depth() > 1 then
+    if tg_op = 'DELETE' then
+      return old;
+    end if;
+    return new;
   end if;
 
-  -- Compact gaps after a move/delete so positions stay contiguous per parent.
-  execute format(
-    'with ranked as (
-       select id, row_number() over (order by position, created_at) - 1 as pos
-       from %I where %I = $1
-     )
-     update %I t set position = r.pos
-     from ranked r where t.id = r.id and t.position <> r.pos',
-    tg_table_name, parent_col, tg_table_name
-  ) using parent_val;
+  -- Identify the parent column for this table.
+  if tg_table_name = 'boards' then
+    parent_col := 'workspace_id';
+  elsif tg_table_name = 'lists' then
+    parent_col := 'board_id';
+  else
+    parent_col := 'list_id';
+  end if;
 
-  if new.position > (
-    select coalesce(max(position) + 1, 0) from boards
-    where case when tg_table_name = 'boards' then workspace_id = parent_val end
-  ) then
-    -- placeholder, real per-table bound handled by callers if needed
-    null;
+  -- `new` is not available on a DELETE trigger, so both parents come from the
+  -- transition variables. Reading only new made the delete path silently compact
+  -- nothing and left gaps behind.
+  if tg_op = 'DELETE' then
+    if tg_table_name = 'boards' then
+      parent_val := old.workspace_id;
+    elsif tg_table_name = 'lists' then
+      parent_val := old.board_id;
+    else
+      parent_val := old.list_id;
+    end if;
+    old_val := parent_val;
+    anchor_id := old.id;
+  else
+    if tg_table_name = 'boards' then
+      parent_val := new.workspace_id;
+      old_val := old.workspace_id;
+    elsif tg_table_name = 'lists' then
+      parent_val := new.board_id;
+      old_val := old.board_id;
+    else
+      parent_val := new.list_id;
+      old_val := old.list_id;
+    end if;
+    anchor_id := new.id;
+  end if;
+
+  -- Compact the parent the row now belongs to.
+  perform compact_positions(tg_table_name, parent_col, parent_val, anchor_id);
+
+  -- Compact the parent the row came from, if it moved. Without this the source
+  -- list keeps a gap where the moved row used to sit.
+  if tg_op = 'UPDATE' and old_val is distinct from parent_val then
+    perform compact_positions(tg_table_name, parent_col, old_val, anchor_id);
+  end if;
+
+  -- A DELETE trigger has no `new` row to return, and PostgreSQL rejects
+  -- `return new` on delete.
+  if tg_op = 'DELETE' then
+    return old;
   end if;
 
   return new;
