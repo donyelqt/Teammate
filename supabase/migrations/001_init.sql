@@ -116,6 +116,9 @@ create trigger cards_set_updated_at
 before update on cards
 for each row execute function set_updated_at();
 
+-- Bound only to the cards table. Writing branches for tables this function
+-- is never attached to does not compile, because `new` has no fields from those
+-- rows. Keep this function to the one record shape it is triggered with.
 create or replace function log_activity()
 returns trigger
 language plpgsql
@@ -125,14 +128,12 @@ as $$
 begin
   insert into activity_events (workspace_id, board_id, card_id, actor_id, kind, payload)
   values (
-    case when tg_table_name = 'workspaces' then new.id
-         else null end,
-    case when tg_table_name = 'boards' then new.id
-         when tg_table_name = 'lists' then (select board_id from boards where id = new.board_id)
-         when tg_table_name = 'cards' then (select board_id from lists where id = new.list_id)
-         else null end,
-    case when tg_table_name = 'cards' then new.id else null end,
-    coalesce(new.created_by, new.user_id, auth.uid()),
+    (select b.workspace_id from lists l
+      join boards b on b.id = l.board_id
+     where l.id = new.list_id),
+    (select l.board_id from lists l where l.id = new.list_id),
+    new.id,
+    coalesce(new.created_by, auth.uid()),
     'created',
     to_jsonb(new) - 'created_at' - 'updated_at' - 'archived_at'
   );

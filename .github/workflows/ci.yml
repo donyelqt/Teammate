@@ -13,7 +13,7 @@ concurrency:
 env:
   NODE_VERSION: "23"
   PYTHON_VERSION: "3.11"
-  PNPM_VERSION: "10.9.2"
+  PNPM_VERSION: "10.34.9"
 
 jobs:
   web-typecheck:
@@ -118,23 +118,18 @@ jobs:
   migrations-check:
     name: Migrations apply cleanly
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: supabase/postgres:15.1.0.117
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
     steps:
       - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      # Migrations reference the auth schema, which only exists inside Supabase.
+      # Applying them against a plain Postgres fails on the first foreign key.
+      - name: Start local Supabase
+        run: supabase start
       - name: Apply migrations in order
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          DATABASE_URL: postgresql://postgres:postgres@localhost:54322/postgres
         run: |
           for f in $(ls supabase/migrations/*.sql | sort); do
             echo "Applying $f"
