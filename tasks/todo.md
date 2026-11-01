@@ -52,25 +52,35 @@
 
 ## Phase 3: Auth
 
-- [ ] Task 7: Supabase client wiring
+- [x] Task 7: Supabase client wiring
   - Acceptance: server, client, and middleware clients each constructed once with correct cookie handling
-  - Verify: `pnpm typecheck`; server client returns a session, browser client does not leak keys
-  - Files: `apps/web/lib/supabase/server.ts`, `client.ts`, `middleware.ts`
+  - Verify: PASS — `pnpm typecheck` clean; anon key only reaches the browser bundle and the secret guard still fires on a `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` probe
+  - Files: `apps/web/src/lib/supabase/server.ts`, `client.ts`, `middleware.ts`
   - Scope: Medium
 
-- [ ] Task 8: Sign-in flow with email OTP
+- [x] Task 8: Sign-in flow with email OTP
   - Acceptance: email sent, code verified, session established, redirect to workspace
-  - Verify: manual sign-in end-to-end on `localhost:3000`
-  - Files: `apps/web/app/(auth)/sign-in/page.tsx`, `apps/web/app/auth/callback/route.ts`
+  - Verify: PARTIAL — form, callback exchange, and redirects are built and
+    compile; `pnpm build` prerenders /sign-in. The end-to-end run on
+    `localhost:3000` needs real Supabase credentials, which this machine does
+    not have.
+  - Files: `apps/web/src/app/(auth)/sign-in/page.tsx`, `apps/web/src/app/auth/callback/route.ts`
   - Scope: Large
 
-- [ ] Task 9: Workspace membership resolution and route guards
+- [x] Task 9: Workspace membership resolution and route guards
   - Acceptance: unauthenticated hits `/` redirect to sign-in; non-members get an empty board query
-  - Verify: session and non-session both exercised
-  - Files: `apps/web/middleware.ts`, `apps/web/lib/auth/workspace.ts`
+  - Verify: PARTIAL — `resolveMembership` returns a typed failure reason rather
+    than throwing, so the caller decides the redirect. RLS guarantees the
+    non-member query returns zero rows; the query itself needs a live session to
+    exercise.
+  - Files: `apps/web/src/middleware.ts`, `apps/web/src/lib/auth/workspace.ts`
   - Scope: Medium
 
 - [ ] Checkpoint: sign in lands on a workspace; non-member queries return zero rows
+  - BLOCKED on Supabase credentials. Everything up to the network call is built,
+    typechecked, linted, and building green on main. The RLS half of this
+    checkpoint is already proven in Phase 2 against real Postgres: the policy
+    suite asserts a non-member reads zero rows on every table.
 
 ## Phase 4: Realtime fabric
 
