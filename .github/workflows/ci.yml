@@ -97,7 +97,7 @@ jobs:
 
       - name: Typecheck
         working-directory: apps/api
-        run: uv run mypy app
+        run: uv run mypy server tests
 
   api-lint:
     name: Lint (api)
@@ -115,7 +115,7 @@ jobs:
         run: uv sync --frozen
       - name: Ruff
         working-directory: apps/api
-        run: uv run ruff check app tests
+        run: uv run ruff check server tests
 
   migrations-check:
     name: Migrations apply cleanly

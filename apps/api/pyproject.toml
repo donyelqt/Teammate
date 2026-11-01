@@ -33,6 +33,14 @@ strict = true
 python_version = "3.13"
 warn_unreachable = true
 disallow_untyped_decorators = false
+explicit_package_bases = true
+
+# `workers` exists only inside the Cloudflare Workers runtime and has no stubs
+# in a host venv. Scoped to that module rather than globally, so a genuinely
+# untyped import elsewhere still fails.
+[[tool.mypy.overrides]]
+module = "workers.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
