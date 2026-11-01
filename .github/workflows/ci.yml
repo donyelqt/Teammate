@@ -127,14 +127,23 @@ jobs:
       # Applying them against a plain Postgres fails on the first foreign key.
       - name: Start local Supabase
         run: supabase start
-      - name: Apply migrations in order
+      # `supabase db reset` drops the local database and rebuilds it from the
+      # migrations directory, which is exactly the deploy path this job exists to
+      # verify. It takes no --db-url; it reads the config written by `supabase
+      # start`. It also clears the reused volume, which is what makes a rerun
+      # idempotent instead of failing on "relation already exists".
+      - name: Apply migrations against a clean database
+        run: supabase db reset --debug
+
+      - name: Verify schema objects were created
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:54322/postgres
         run: |
-          for f in $(ls supabase/migrations/*.sql | sort); do
-            echo "Applying $f"
-            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
-          done
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
+            select count(*) from information_schema.tables
+            where table_schema = 'public' and table_name in
+              ('workspaces','workspace_members','boards','lists','cards',
+               'comments','activity_events','card_presence');"
 
   policy-tests:
     name: RLS policy tests
