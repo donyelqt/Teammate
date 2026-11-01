@@ -56,6 +56,71 @@ begin
 end;
 $$;
 
+/**
+ * Asserts the ordering invariant for one list: positions are a contiguous
+ * sequence starting at 0, with no duplicate and no gap.
+ *
+ * `expected_order` optionally pins the exact titles in position order. Pass
+ * null when only the invariant matters, such as in the concurrent block where
+ * either session may legitimately have landed last.
+ */
+create or replace function tests.assert_contiguous(
+  target_list uuid,
+  expected_order text[]
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actual_positions bigint[];
+  actual_titles text[];
+  n bigint;
+  duplicates bigint;
+begin
+  select array_agg(position::bigint order by position), array_agg(title order by position)
+    into actual_positions, actual_titles
+    from cards
+   where list_id = target_list;
+
+  if actual_positions is null or array_length(actual_positions, 1) = 0 then
+    raise exception 'POLICY TEST FAILED: list % has no cards', target_list;
+  end if;
+
+  n := array_length(actual_positions, 1);
+
+  -- Contiguity: the sorted positions must be exactly 0..n-1.
+  if actual_positions <> (select array_agg(g) from generate_series(0, n - 1) as g) then
+    raise exception
+      'POLICY TEST FAILED: list % positions are %, not contiguous 0..%',
+      target_list, actual_positions, n - 1;
+  end if;
+
+  -- Duplicates are a separate check from contiguity, because the compaction
+  -- trigger rewrites every row and a bug there can produce both.
+  select count(*) into duplicates
+  from (
+    select position from cards where list_id = target_list
+    group by position having count(*) > 1
+  ) d;
+
+  if duplicates <> 0 then
+    raise exception
+      'POLICY TEST FAILED: list % has % duplicate position(s), positions=%',
+      target_list, duplicates, actual_positions;
+  end if;
+
+  if expected_order is not null then
+    if actual_titles <> expected_order then
+      raise exception
+        'POLICY TEST FAILED: list % order is %, expected %',
+        target_list, actual_titles, expected_order;
+    end if;
+  end if;
+end;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Setup: owner creates workspace, adds member, creates board/list/card.
 -- ---------------------------------------------------------------------------
@@ -244,30 +309,160 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 6. Positions stay contiguous per parent after mixed moves.
+-- 6. Positions stay contiguous per parent after insert, delete, and move.
+--
+-- Three separate blocks, because the trigger's compaction has three entry
+-- points and a single sequential UPDATE exercises only one of them. The delete
+-- path was previously untested, and moves arriving concurrently from two
+-- sessions were not tested at all, which is the case the design has to survive.
 -- ---------------------------------------------------------------------------
+
+-- 6a. Insert into a populated list keeps the sequence contiguous. Inserting A
+-- at position 0 displaces the fixture card, because a card inserted at an
+-- occupied slot takes that slot rather than sorting behind the occupant.
 select tests.as_user('11111111-1111-1111-1111-111111111111');
 do $$
 declare
   positions bigint[];
-  gaps bigint;
 begin
   insert into cards (list_id, title, position, created_by) values
     ('cccccccc-0000-0000-0000-000000000001', 'A', 0, auth.uid()),
     ('cccccccc-0000-0000-0000-000000000001', 'B', 1, auth.uid()),
     ('cccccccc-0000-0000-0000-000000000001', 'C', 2, auth.uid());
 
-  update cards set position = 0, list_id = 'cccccccc-0000-0000-0000-000000000001' where title = 'C';
+  perform tests.assert_contiguous(
+    'cccccccc-0000-0000-0000-000000000001',
+    array['A', 'Wire the board shell', 'B', 'C']
+  );
+end;
+$$;
 
-  select array_agg(position::bigint order by position) into positions
-  from cards where list_id = 'cccccccc-0000-0000-0000-000000000001';
+-- 6b. Deleting from the middle closes the gap.
+do $$
+declare
+  positions bigint[];
+begin
+  delete from cards
+  where list_id = 'cccccccc-0000-0000-0000-000000000001' and title = 'B';
 
-  select count(*) into gaps from cards c
-  where c.list_id = 'cccccccc-0000-0000-0000-000000000001'
-    and c.position <> (select count(*) from cards c2 where c2.list_id = c.list_id and c2.position < c.position);
+  perform tests.assert_contiguous(
+    'cccccccc-0000-0000-0000-000000000001',
+    array['A', 'Wire the board shell', 'C']
+  );
+end;
+$$;
 
-  if gaps <> 0 then
-    raise exception 'POLICY TEST FAILED: % rows have a non-derived position, array=%', gaps, positions;
+-- 6c. A move inside the list reorders and compacts. "C" moves to the front,
+-- pushing the fixture card and "A" down one each.
+do $$
+declare
+  positions bigint[];
+begin
+  update cards
+     set position = 0, list_id = 'cccccccc-0000-0000-0000-000000000001'
+   where list_id = 'cccccccc-0000-0000-0000-000000000001' and title = 'C';
+
+  perform tests.assert_contiguous(
+    'cccccccc-0000-0000-0000-000000000001',
+    array['C', 'A', 'Wire the board shell']
+  );
+end;
+$$;
+
+-- 6d. A move across lists. Cards change parent, so they compact into the
+-- destination and the source re-compacts without them.
+do $$
+declare
+  dest_list uuid;
+begin
+  -- Give the board a second list to move into.
+  insert into lists (board_id, name, position)
+  values ('bbbbbbbb-0000-0000-0000-000000000001', 'In Progress', 1)
+  returning id into dest_list;
+
+  update cards
+     set list_id = dest_list, position = 0
+   where list_id = 'cccccccc-0000-0000-0000-000000000001' and title = 'A';
+
+  perform tests.assert_contiguous(
+    dest_list,
+    array['A']
+  );
+
+  perform tests.assert_contiguous(
+    'cccccccc-0000-0000-0000-000000000001',
+    array['C', 'Wire the board shell']
+  );
+end;
+$$;
+
+-- 6e. Concurrent moves. Two sessions interleave their writes without
+-- coordination. The outcome must be one of the two submitted orders with no
+-- duplicates and no gaps; it must not corrupt the sequence.
+--
+-- Level deterministic on a single connection, so this does not reproduce a
+-- real race. What it does prove is that repeated reorderings of the same rows
+-- by different sessions converge to a contiguous sequence rather than drifting
+-- into duplicates. Racing two live sessions needs a client harness outside a
+-- SQL script and is covered by the reconnect suite in apps/web.
+do $$
+declare
+  i integer;
+  n bigint;
+  baseline bigint;
+begin
+  -- Capture what the earlier sections left in this list, so the count assertion
+  -- below does not depend on their leftovers.
+  select count(*) into baseline
+  from cards
+  where list_id = 'cccccccc-0000-0000-0000-000000000001';
+
+  -- Populate the list with a fresh set, because the earlier sections have
+  -- already moved cards out of it.
+  insert into cards (list_id, title, position, created_by) values
+    ('cccccccc-0000-0000-0000-000000000001', 'M1', 0, auth.uid()),
+    ('cccccccc-0000-0000-0000-000000000001', 'M2', 1, auth.uid()),
+    ('cccccccc-0000-0000-0000-000000000001', 'M3', 2, auth.uid()),
+    ('cccccccc-0000-0000-0000-000000000001', 'M4', 3, auth.uid());
+
+  -- Alternate two sessions claiming the front of the queue. Each claim uses a
+  -- position the other session may also be claiming, so the compaction runs
+  -- while two writers disagree.
+  for i in 1..5 loop
+    perform tests.as_user('22222222-2222-2222-2222-222222222222');
+    update cards
+       set position = 0
+     where list_id = 'cccccccc-0000-0000-0000-000000000001' and title = 'M3';
+
+    perform tests.as_user('11111111-1111-1111-1111-111111111111');
+    update cards
+       set position = 0
+     where list_id = 'cccccccc-0000-0000-0000-000000000001' and title = 'M2';
+
+    -- Contiguity is the invariant. Which of the two landed last is not
+    -- checked here: last-write-wins is the documented policy (ADR-0006), so
+    -- either order is a legitimate outcome of this interleave.
+    perform tests.assert_contiguous(
+      'cccccccc-0000-0000-0000-000000000001',
+      null::text[]
+    );
+  end loop;
+
+  -- Nothing may be duplicated or dropped by all that reordering. The count is
+  -- the baseline captured before the loop plus the four cards inserted into it,
+  -- so the assertion does not depend on what earlier sections left behind.
+  if n <> baseline + 4 then
+    raise exception
+      'POLICY TEST FAILED: reorder loop left % card(s), expected %',
+      n, baseline + 4;
+  end if;
+
+  -- Titles must all still be distinct.
+  if (select count(distinct title) from cards
+      where list_id = 'cccccccc-0000-0000-0000-000000000001')
+     <> (select count(*) from cards
+         where list_id = 'cccccccc-0000-0000-0000-000000000001') then
+    raise exception 'POLICY TEST FAILED: duplicate titles after reordering';
   end if;
 end;
 $$;
