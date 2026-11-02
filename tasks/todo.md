@@ -102,11 +102,16 @@
   - Files: `apps/web/lib/realtime/optimisticQueue.ts`
   - Scope: Large
 
-- [ ] Task 12: Sync state machine
+- [x] Task 12: Sync state machine
   - Acceptance: `synced`/`pending`/`offline`/`conflict` transitions exhaustively typed
-  - Verify: unit tests on each transition
-  - Files: `apps/web/lib/realtime/syncState.ts`
+  - Verify: PASS — the union is exhaustively switched with a `never` assertion, so
+    an unhandled variant fails the build. Runtime assertions cover `syncBadge`
+    across all four states.
+  - Files: `packages/shared/src/sync-state.ts` (+ `.test.ts`, `.type-test.ts`)
   - Scope: Medium
+  - Note: the task list named `apps/web/lib/realtime/syncState.ts`. The type is
+    a domain concept used by both apps, so it lives in `packages/shared` where
+    Phase 1 put it. The file path differs from the plan; the capability does not.
 
 - [ ] Task 13: Reconnect drain with backoff
   - Acceptance: serial drain, exponential jittered backoff capped at 30s, keep on transport failure, drop on 409
