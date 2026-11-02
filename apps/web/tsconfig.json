@@ -22,7 +22,8 @@
     "jsx": "preserve",
     "paths": {
       "@/*": [
-        "./src/*"
+        "./src/*",
+        "./*"
       ]
     },
     "esModuleInterop": true,
