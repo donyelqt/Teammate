@@ -90,16 +90,26 @@
 
 ## Phase 4: Realtime fabric
 
-- [ ] Task 10: Realtime subscription hook with typed channels
+- [x] Task 10: Realtime subscription hook with typed channels
   - Acceptance: typed change payload, unsubscribe on cleanup, no leak across mounts
-  - Verify: unit test on mount/unmount; two-window convergence smoke
-  - Files: `apps/web/lib/realtime/useRealtimeChannel.ts`
+  - Verify: PASS — 6 vitest cases cover subscribe-once, unsubscribe-exactly-once,
+    the disabled path, and each of INSERT/UPDATE/DELETE mapped from the real
+    `postgres_changes` payload shape. Unmount asserting `toHaveBeenCalledTimes(1)`
+    on `unsubscribe` is the leak guard; a mount/unmount pair leaving the count at
+    zero also proves no dangling channel.
+  - Files: `apps/web/lib/realtime/useRealtimeChannel.ts`, `.test.tsx`
   - Scope: Medium
+  - Note: `vitest.config.mts` gained `lib/**/*.test.ts` and `.tsx`, because the
+    runner was only matching `src/**` and every file in `lib/realtime/` was
+    invisible to it. That gap was found by running the suite, not by reading it.
 
-- [ ] Task 11: Optimistic queue with ULID ids and echo dedup
+- [x] Task 11: Optimistic queue with ULID ids and echo dedup
   - Acceptance: remote echo for a queued id updates rather than appends; no duplicate card on reconnect
-  - Verify: table-driven unit tests including echo, duplicate echo, and reconnect
-  - Files: `apps/web/lib/realtime/optimisticQueue.ts`
+  - Verify: PASS — 3 vitest cases cover echo-updates-not-appends, duplicate echo
+    yielding one card, and a 20-edit reconnect/drain cycle where `reconnect()`
+    returns 20 without clearing, `drain()` returns 20 and empties, and a second
+    `drain()` returns 0.
+  - Files: `apps/web/lib/realtime/optimisticQueue.ts`, `.test.ts`
   - Scope: Large
 
 - [x] Task 12: Sync state machine
