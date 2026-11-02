@@ -1,11 +1,3 @@
-/**
- * API contract between the web app and the FastAPI service.
- *
- * Every response that crosses the FastAPI boundary is parsed here with zod
- * before it reaches application code. `unknown` enters; a typed value leaves.
- * Nothing downstream trusts a raw `Response.json()`.
- */
-
 import { z } from "zod";
 
 export const HealthResponseSchema = z.object({
