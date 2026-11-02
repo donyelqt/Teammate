@@ -10,18 +10,6 @@ type Phase =
   | { readonly kind: "sent" }
   | { readonly kind: "error"; readonly message: string };
 
-/**
- * Email sign-in by magic link.
- *
- * This sends a link rather than collecting a one-time code. The code variant was
- * written first and cannot work: the auth server emails a link carrying a
- * one-use token hash, and no six-digit token is ever issued, so
- * `verifyOtp({ type: "email" })` has nothing to verify. Verified against the
- * local stack on 2026-11-02; see `docs/VERIFICATION-auth-otp.md`.
- *
- * The exchange happens in `/auth/callback`, which reads the token the link
- * carries and trades it for a session.
- */
 export default function SignInPage() {
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") ?? "/";
@@ -36,17 +24,11 @@ export default function SignInPage() {
     event.preventDefault();
     setPending(true);
 
-    // Constructed in the handler rather than during render, so the route can be
-    // prerendered when no Supabase variables are present. Reading the browser
-    // contract during render throws and would fail the build instead of the
-    // interaction.
     const supabase = createClient();
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        // Must be absolute. Supabase redirects here after verifying the token,
-        // and a relative path is rejected by the server rather than resolved.
         emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
         shouldCreateUser: true,
       },
