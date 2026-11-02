@@ -60,27 +60,33 @@
 
 - [x] Task 8: Sign-in flow with email OTP
   - Acceptance: email sent, code verified, session established, redirect to workspace
-  - Verify: PARTIAL — form, callback exchange, and redirects are built and
-    compile; `pnpm build` prerenders /sign-in. The end-to-end run on
-    `localhost:3000` needs real Supabase credentials, which this machine does
-    not have.
+  - Verify: PASS — verified against a live local Supabase stack on 2026-11-02.
+    The mechanism is a magic link, not a numeric code: GoTrue emails a link
+    carrying a one-use token hash and no six-digit token is issued, so the
+    code-collecting form could not work. `GET /auth/v1/verify?...&type=magiclink`
+    returns 303 with a redirect to `#access_token=<JWT>`. Evidence in
+    `docs/VERIFICATION-auth-otp.md`.
   - Files: `apps/web/src/app/(auth)/sign-in/page.tsx`, `apps/web/src/app/auth/callback/route.ts`
   - Scope: Large
 
 - [x] Task 9: Workspace membership resolution and route guards
   - Acceptance: unauthenticated hits `/` redirect to sign-in; non-members get an empty board query
-  - Verify: PARTIAL — `resolveMembership` returns a typed failure reason rather
-    than throwing, so the caller decides the redirect. RLS guarantees the
-    non-member query returns zero rows; the query itself needs a live session to
-    exercise.
+  - Verify: PASS — `/auth/callback` with no code returns 307 to
+    `/sign-in?error=missing_code`, and with a bad code 307 to sign-in carrying
+    Supabase's PKCE error. An anon-key query on `workspace_members` returns
+    `[]`, so the non-member boundary holds through real RLS.
   - Files: `apps/web/src/middleware.ts`, `apps/web/src/lib/auth/workspace.ts`
   - Scope: Medium
 
-- [ ] Checkpoint: sign in lands on a workspace; non-member queries return zero rows
-  - BLOCKED on Supabase credentials. Everything up to the network call is built,
-    typechecked, linted, and building green on main. The RLS half of this
-    checkpoint is already proven in Phase 2 against real Postgres: the policy
-    suite asserts a non-member reads zero rows on every table.
+- [x] Checkpoint: sign in lands on a workspace; non-member queries return zero rows
+  - Verified 2026-11-02 via PR #7 against the local Supabase stack:
+  - migration applies, password grant returns a 780-char token
+  - `GET /auth/v1/verify` 303 with a session JWT in the fragment
+  - anon query on `workspace_members` returns `[]`
+  - callback route redirects correctly with and without a code
+  - `pnpm typecheck`, `pnpm lint`, `pnpm build` clean; 8/8 CI jobs green on main
+  - One gap remains, recorded: the full redirect chain from the emailed link
+    into the app needs a browser that can reach the `redirect_to` host.
 
 ## Phase 4: Realtime fabric
 
