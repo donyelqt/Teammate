@@ -23,6 +23,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.118.0
         version: 2.118.0
+      '@teammate/shared':
+        specifier: workspace:^
+        version: link:../../packages/shared
       next:
         specifier: 15.5.28
         version: 15.5.28(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
