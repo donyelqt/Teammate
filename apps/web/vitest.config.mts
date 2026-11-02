@@ -7,6 +7,7 @@ export default defineConfig({
     include: [
       "src/**/*.test.ts",
       "src/**/*.test.tsx",
+      "lib/**/*.test.ts",
       "../../packages/shared/src/**/*.test.ts",
     ],
     globals: false,
@@ -15,7 +16,7 @@ export default defineConfig({
 
     coverage: {
       provider: "v8",
-      include: ["src/lib/**"],
+      include: ["src/lib/**", "lib/**"],
       // Reporting only. No threshold is set yet, because a threshold on a new
       // suite fails the build before the suite has grown to meet it.
       thresholds: {},
