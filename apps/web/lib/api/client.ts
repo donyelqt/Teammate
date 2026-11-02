@@ -1,12 +1,4 @@
-/**
- * Typed API client for the FastAPI boundary.
- *
- * Every response is validated against a zod schema before it reaches
- * application code. `unknown` enters; a typed value leaves.
- */
-
 import { z } from "zod";
-
 
 export interface ApiClientOptions {
   baseUrl?: string;
@@ -40,7 +32,6 @@ export class ApiClient {
           if (typeof d === "string") detail = d;
         }
       } catch {
-        // body not JSON; keep statusText
       }
       throw new ApiError(res.status, detail);
     }
