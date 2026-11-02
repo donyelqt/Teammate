@@ -1,12 +1,5 @@
 import { Suspense, type ReactNode } from "react";
 
-/**
- * `useSearchParams` opts a route out of static rendering. Without a Suspense
- * boundary above it, Next.js fails the build rather than prerendering it.
- *
- * The fallback is a placeholder of the same height rather than a spinner, so the
- * page does not shift when the form arrives.
- */
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <Suspense
