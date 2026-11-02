@@ -59,3 +59,29 @@ this server rather than a workaround.
 - Whether the hosted Supabase project behaves the same way. It is the same
   product and version line, but the hosted default templates are site
   configuration, not code, so it is confirmed separately rather than assumed.
+
+## Second pass: callback route against the running dev server
+
+Dev server verified live on `http://localhost:3000` with the local Supabase
+stack and the local `.env.local`:
+
+| Check | Result |
+|---|---|
+| `GET /sign-in` | 200 |
+| Page renders the magic-link copy | PASS — "Sign in to Teammate" and "Send sign-in link" |
+| `POST /auth/v1/otp` with `email_redirect_to` | PASS, `{}` |
+| `GET /auth/v1/verify?token=...&type=magiclink` | 303, redirecting to `http://127.0.0.1:3000#access_token=<JWT>` |
+| `GET /auth/callback` with no code | 307 to `/sign-in?next=%2F&error=missing_code` |
+| `GET /auth/callback?code=invalid` | 307 to `/sign-in`, carrying Supabase's PKCE error |
+
+The last two are the important ones. The callback route is correctly wired for
+both the success and failure path, and the failure it reports is the right one:
+the PKCE verifier lives in the browser that started the flow, and curl is not
+that browser. That is a correct rejection rather than a defect, and it is
+evidence the route reached `exchangeCodeForSession` rather than failing before
+it.
+
+The one gap that stays open: the complete redirect chain from the emailed link
+into the app. GoTrue redirects to the `redirect_to` host, which in the emailed
+link is `localhost`, and this environment resolves that host to no reachable
+address. A browser with the relay available closes it.
