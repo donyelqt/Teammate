@@ -1,10 +1,6 @@
 import { ulid } from "ulid";
 import type { CardId } from "@teammate/shared";
 
-// ---------------------------------------------------------------------------
-// Optimistic mutation queue
-// ---------------------------------------------------------------------------
-
 export interface OptimisticMutation {
   readonly id: string;
   readonly cardId: CardId;
