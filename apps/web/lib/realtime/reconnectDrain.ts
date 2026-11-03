@@ -1,24 +1,5 @@
 import type { OptimisticMutation, OptimisticQueue } from "./optimisticQueue";
 
-// ---------------------------------------------------------------------------
-// Reconnect drain
-// ---------------------------------------------------------------------------
-// Replays queued optimistic mutations after the realtime transport drops.
-//
-// The drain serialises the queue, applies exponential jittered backoff between
-// attempts, and survives transport failures without losing work or
-// duplicating it:
-//   - the queue is inspected with `reconnect()` and never written to, so a
-//     drain can neither duplicate a mutation nor enqueue new work;
-//   - a mutation is `ack`ed exactly once, and only after it is delivered or
-//     dropped as a conflict, so it can never be sent twice;
-//   - a transport failure leaves the mutation in the queue and is retried;
-//   - a fatal error stops the run, leaving every undelivered mutation queued.
-
-// ---------------------------------------------------------------------------
-// Failure classification
-// ---------------------------------------------------------------------------
-
 export type DrainError =
   | { readonly kind: "transport" }
   | { readonly kind: "conflict"; readonly remote: unknown }
@@ -28,10 +9,6 @@ export type DrainAttempt =
   | { readonly ok: true }
   | { readonly ok: false; readonly error: DrainError };
 
-// ---------------------------------------------------------------------------
-// Backoff policy
-// ---------------------------------------------------------------------------
-
 export interface BackoffPolicy {
   readonly baseMs: number;
   readonly maxMs: number;
@@ -39,7 +16,6 @@ export interface BackoffPolicy {
   readonly jitter: number;
 }
 
-/** Monotonic precedence: explicit field > built-in default. */
 export type PartialBackoffPolicy = {
   readonly [K in keyof BackoffPolicy]?: BackoffPolicy[K];
 };
@@ -51,26 +27,15 @@ export const DEFAULT_BACKOFF_POLICY: BackoffPolicy = {
   jitter: 0.25,
 };
 
-/**
- * Delay before retry `attempt` (0-based: 0 is the first retry).
- *
- * `delay = min(baseMs * factor^attempt, maxMs)`, then randomised by up to the
- * `jitter` fraction of that delay in either direction. Never negative, never
- * above `maxMs`. Deterministic under a stubbed `Math.random`.
- */
 export function nextDelay(attempt: number, policy: BackoffPolicy): number {
   const capped = Math.min(
     policy.baseMs * Math.pow(policy.factor, attempt),
     policy.maxMs,
   );
-  // Two-sided: `Math.random` in [0,1) maps onto [-spread, +spread].
+
   const spread = capped * clamp(policy.jitter, 0, 1);
   return clamp(capped + (Math.random() * 2 - 1) * spread, 0, policy.maxMs);
 }
-
-// ---------------------------------------------------------------------------
-// Summary
-// ---------------------------------------------------------------------------
 
 export type DrainSummary = {
   readonly sent: number;
@@ -85,11 +50,6 @@ export type DropRecord = {
   readonly remote: unknown;
 };
 
-// ---------------------------------------------------------------------------
-// Retry state, modelled explicitly
-// ---------------------------------------------------------------------------
-
-/** A mutation still in play, plus how many times this run has tried it. */
 type PendingAttempt = {
   readonly mutation: OptimisticMutation;
   readonly retries: number;
@@ -98,10 +58,6 @@ type PendingAttempt = {
 type RunState =
   | { readonly kind: "running" }
   | { readonly kind: "stopped"; readonly reason: string };
-
-// ---------------------------------------------------------------------------
-// Drain
-// ---------------------------------------------------------------------------
 
 export class ReconnectDrain {
   private readonly queue: OptimisticQueue;
@@ -130,25 +86,19 @@ export class ReconnectDrain {
     this.state = { kind: "running" };
   }
 
-  /**
-   * Drains the whole queue, retrying transport failures until every mutation
-   * is delivered, conflicted, or fatally blocked.
-   */
+  
   async drain(): Promise<DrainSummary> {
     this.state = { kind: "running" };
     return this.run();
   }
 
-  /**
-   * Drains what it can, then stops at the first failure, leaving the failed
-   * mutation and everything queued behind it in the queue.
-   */
+  
   async drainAndStop(): Promise<DrainSummary> {
     this.state = { kind: "stopped", reason: "stopped at first failure" };
     return this.run();
   }
 
-  /** Overridable seam: tests drive backoff without blocking on real time. */
+  
   protected wait(ms: number): Promise<void> {
     return new Promise<void>((resolve) => {
       setTimeout(resolve, ms);
@@ -167,8 +117,7 @@ export class ReconnectDrain {
     }));
 
     while (pending.length > 0) {
-      // The freshest work first; among equally retried mutations the oldest
-      // wins, so one stuck mutation cannot starve the rest of the queue.
+
       const index = nextAttempt(pending);
       const entry = pending[index];
       if (entry === undefined) {
@@ -176,7 +125,7 @@ export class ReconnectDrain {
       }
 
       if (entry.retries > 0) {
-        // Backoff precedes the retry, never the first attempt.
+
         await this.wait(nextDelay(entry.retries - 1, this.policy));
       }
       attemptCount += 1;
@@ -192,7 +141,7 @@ export class ReconnectDrain {
 
       switch (outcome.error.kind) {
         case "conflict": {
-          // Dropped, never retried and never delivered.
+
           conflicts.push({
             mutationId: entry.mutation.id,
             remote: outcome.error.remote,
@@ -219,7 +168,7 @@ export class ReconnectDrain {
     return this.summarise(sentCount, conflicts, stopped, attemptCount);
   }
 
-  /** A transport failure is never a reason to drop work, only to retry it. */
+  
   private async attempt(
     mutation: OptimisticMutation,
   ): Promise<DrainAttempt> {
@@ -246,14 +195,6 @@ export class ReconnectDrain {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Index of the mutation to try next: the least-retried one, oldest first.
- * A mutation retried once yields to fresh work instead of starving it.
- */
 function nextAttempt(pending: readonly PendingAttempt[]): number {
   let best = 0;
   for (let i = 1; i < pending.length; i += 1) {
