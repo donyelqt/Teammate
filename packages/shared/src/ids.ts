@@ -19,6 +19,8 @@ export type CommentId = string & {
 };
 export type UserId = string & { readonly [UserIdBrand]: "UserId" };
 
+export type WorkspaceRole = "owner" | "admin" | "member" | "viewer";
+
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -48,4 +50,15 @@ export function isCommentId(value: unknown): value is CommentId {
 
 export function isUserId(value: unknown): value is UserId {
   return isUuid(value);
+}
+
+const WORKSPACE_ROLES: readonly string[] = [
+  "owner",
+  "admin",
+  "member",
+  "viewer",
+];
+
+export function isWorkspaceRole(value: unknown): value is WorkspaceRole {
+  return typeof value === "string" && WORKSPACE_ROLES.includes(value);
 }
