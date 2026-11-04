@@ -79,7 +79,7 @@ export function ActivityPanel({
         <button
           type="button"
           onClick={onClose}
-          className="rounded p-1 text-muted hover:bg-surface-2 hover:text-foreground"
+          className="rounded p-1 text-muted hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
           aria-label="Close activity panel"
         >
           ✕
@@ -90,7 +90,7 @@ export function ActivityPanel({
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className="rounded border border-border px-2 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
+          className="rounded border border-border px-2 py-1 text-xs hover:bg-surface-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
           {loading ? "Refreshing…" : "Refresh"}
         </button>
