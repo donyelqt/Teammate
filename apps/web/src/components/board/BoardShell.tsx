@@ -484,7 +484,7 @@ useEffect(() => {
         <button
           type="button"
           onClick={refresh}
-          className="rounded border border-border px-3 py-1.5 text-sm hover:bg-surface"
+          className="rounded border border-border px-3 py-1.5 text-sm hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
           Retry
         </button>
@@ -507,7 +507,7 @@ useEffect(() => {
         <button
           type="button"
           onClick={() => setActivityPanelOpen((v) => !v)}
-          className="ml-auto rounded border border-border px-3 py-1.5 text-sm hover:bg-surface"
+          className="ml-auto rounded border border-border px-3 py-1.5 text-sm hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
           Activity
         </button>
