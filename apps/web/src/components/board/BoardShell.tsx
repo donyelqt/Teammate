@@ -1,22 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { ulid, ulidToUUID } from "ulid";
 import { z } from "zod";
-import type { BoardId } from "@teammate/shared";
-import { isBoardId, isListId } from "@teammate/shared";
+import type { BoardId, CardId, ListId, UserId } from "@teammate/shared";
+import { isBoardId, isListId, isUserId } from "@teammate/shared";
 
 import {
   useRealtimeChannel,
   type RealtimeCardEvent,
-} from "@/../lib/realtime/useRealtimeChannel";
+} from "@/lib/realtime/useRealtimeChannel";
+import {
+  createCardState,
+  cardReducer,
+  isPending,
+  type Card,
+} from "@/lib/cards/cardReducer";
+import { createCardRepository } from "@/lib/cards/cardRepository";
 import { createClient } from "@/lib/supabase/client";
-
-const CardSchema = z.object({
-  id: z.string(),
-  list_id: z.string(),
-  title: z.string(),
-  position: z.number(),
-});
+import { AddCard, CardItem } from "@/components/card/Card";
 
 const ListSchema = z.object({
   id: z.string(),
@@ -24,58 +26,67 @@ const ListSchema = z.object({
   position: z.number(),
 });
 
-const ListRowSchema = z.array(ListSchema);
-const CardRowSchema = z.array(CardSchema);
-
-type List = z.infer<typeof ListSchema>;
-type Card = z.infer<typeof CardSchema>;
-
-interface BoardData {
-  readonly lists: List[];
-  readonly cards: Card[];
+interface BoardList {
+  id: ListId;
+  name: string;
+  position: number;
 }
 
-function sortCards(cards: Card[]): Card[] {
-  return cards.slice().sort((a, b) => a.position - b.position);
-}
-
-function sortLists(lists: List[]): List[] {
+function sortLists(lists: BoardList[]): BoardList[] {
   return lists.slice().sort((a, b) => a.position - b.position);
 }
 
 export function BoardShell({ boardId }: { boardId: string }) {
-  const [data, setData] = useState<BoardData | null>(null);
+  const [lists, setLists] = useState<BoardList[]>([]);
+  const [cardState, dispatch] = useReducer(
+    cardReducer,
+    undefined,
+    createCardState,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const listIdsRef = useRef<Set<string>>(new Set());
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const [addingToListId, setAddingToListId] = useState<ListId | null>(null);
+  const [addTitle, setAddTitle] = useState("");
+  const [editingCardId, setEditingCardId] = useState<CardId | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+
+  const listIdsRef = useRef<ListId[]>([]);
+  const repositoryRef = useRef<ReturnType<typeof createCardRepository> | null>(
+    null,
+  );
+  const userIdRef = useRef<UserId | null>(null);
 
   const load = useCallback(async () => {
     const supabase = createClient();
-    const listQuery = supabase
+    repositoryRef.current = createCardRepository(supabase);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user && isUserId(user.id)) {
+      userIdRef.current = user.id;
+    }
+
+    const { data: listRows, error: listError } = await supabase
       .from("lists")
       .select("id, name, position")
       .eq("board_id", boardId);
-    const listResult = await listQuery;
-    if (listResult.error) {
-      throw new Error(listResult.error.message);
-    }
-    const lists = ListRowSchema.parse(listResult.data ?? []);
-    const ids = lists.map((list) => list.id);
-    listIdsRef.current = new Set(ids);
+    if (listError) throw new Error(listError.message);
 
-    let cards: Card[] = [];
-    if (ids.length > 0) {
-      const cardResult = await supabase
-        .from("cards")
-        .select("id, list_id, title, position")
-        .in("list_id", ids)
-        .is("archived_at", null);
-      if (cardResult.error) {
-        throw new Error(cardResult.error.message);
-      }
-      cards = CardRowSchema.parse(cardResult.data ?? []);
-    }
-    return { lists: sortLists(lists), cards: sortCards(cards) };
+    const parsedLists = (listRows ?? []).map((row) => {
+      const parsed = ListSchema.parse(row);
+      if (!isListId(parsed.id)) throw new Error("invalid list id");
+      return { id: parsed.id, name: parsed.name, position: parsed.position };
+    });
+    const sortedLists = sortLists(parsedLists);
+    setLists(sortedLists);
+    const ids = sortedLists.map((l) => l.id);
+    listIdsRef.current = ids;
+
+    const cards = await repositoryRef.current.list(ids);
+    dispatch({ type: "hydrate", cards });
   }, [boardId]);
 
   useEffect(() => {
@@ -83,9 +94,8 @@ export function BoardShell({ boardId }: { boardId: string }) {
     setLoading(true);
     setError(null);
     load()
-      .then((result) => {
+      .then(() => {
         if (!active) return;
-        setData(result);
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -98,51 +108,110 @@ export function BoardShell({ boardId }: { boardId: string }) {
     };
   }, [load]);
 
-  const handleEvent = useCallback(
-    (event: RealtimeCardEvent) => {
-      if (event.event === "DELETE") {
-        const cardId = event.cardId;
-        if (!cardId) return;
-        setData((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            cards: prev.cards.filter((c) => c.id !== cardId),
-          };
-        });
+  const handleEvent = useCallback((event: RealtimeCardEvent) => {
+    if (event.event === "DELETE") {
+      const cardId = event.cardId;
+      if (cardId) {
+        dispatch({ type: "remoteDelete", cardId });
+      }
+      return;
+    }
+    const card = event.card;
+    if (!listIdsRef.current.includes(card.list_id)) return;
+    dispatch({ type: "remoteUpsert", card });
+  }, []);
+
+  const boardIdValue = isBoardId(boardId) ? boardId : (boardId as BoardId);
+  useRealtimeChannel(boardIdValue, {
+    onEvent: handleEvent,
+    listIds: listIdsRef.current,
+  });
+
+  const createCard = useCallback(
+    async (listId: ListId, title: string) => {
+      const trimmed = title.trim();
+      const repo = repositoryRef.current;
+      const userId = userIdRef.current;
+      if (!trimmed || !repo || !userId) return;
+
+      const cardId = ulidToUUID(ulid()) as CardId;
+      const position =
+        cardState.cards.filter((c) => c.list_id === listId).length > 0
+          ? Math.max(
+              ...cardState.cards
+                .filter((c) => c.list_id === listId)
+                .map((c) => c.position),
+            ) + 1
+          : 0;
+
+      const optimisticCard: Card = {
+        id: cardId,
+        list_id: listId,
+        title: trimmed,
+        position,
+      };
+      dispatch({
+        type: "optimistic",
+        mutation: { kind: "create", card: optimisticCard },
+      });
+
+      try {
+        await repo.create({ listId, title: trimmed, userId });
+        dispatch({ type: "ack", cardId });
+      } catch (err: unknown) {
+        setNotice(
+          err instanceof Error ? err.message : "Could not create card",
+        );
+        setAddingToListId(listId);
+        setAddTitle(trimmed);
+      }
+    },
+    [cardState.cards],
+  );
+
+  const saveCardTitle = useCallback(
+    async (cardId: CardId, title: string) => {
+      const repo = repositoryRef.current;
+      const trimmed = title.trim();
+      if (!repo || !trimmed) {
+        setEditingCardId(null);
         return;
       }
-
-      const card = event.card;
-      const cardListId = card.list_id;
-      if (!listIdsRef.current.has(cardListId)) return;
-
-      setData((prev) => {
-        if (!prev) return prev;
-        const nextCard: Card = {
-          id: card.id,
-          list_id: card.list_id,
-          title: card.title,
-          position: card.position,
-        };
-        const exists = prev.cards.some((c) => c.id === nextCard.id);
-        const cards = exists
-          ? prev.cards.map((c) => (c.id === nextCard.id ? nextCard : c))
-          : [...prev.cards, nextCard];
-        return { ...prev, cards: sortCards(cards) };
+      dispatch({
+        type: "optimistic",
+        mutation: { kind: "update", cardId, title: trimmed },
       });
+      try {
+        await repo.update(cardId, trimmed);
+        dispatch({ type: "ack", cardId });
+      } catch {
+        setNotice("Could not save card. Reload to resync.");
+      }
+      setEditingCardId(null);
     },
     [],
   );
 
-  const boardIdValue = isBoardId(boardId) ? boardId : (boardId as BoardId);
-  const listIds = data
-    ? data.lists.map((list) => list.id).filter(isListId)
-    : undefined;
-  const realtime = useRealtimeChannel(boardIdValue, {
-    onEvent: handleEvent,
-    listIds,
-  });
+  const deleteCard = useCallback(async (cardId: CardId) => {
+    const repo = repositoryRef.current;
+    if (!repo) return;
+    dispatch({ type: "optimistic", mutation: { kind: "delete", cardId } });
+    try {
+      await repo.delete(cardId);
+      dispatch({ type: "ack", cardId });
+    } catch {
+      setNotice("Could not delete card. Reload to resync.");
+    }
+  }, []);
+
+  const refresh = useCallback(() => {
+    setNotice(null);
+    setAddingToListId(null);
+    setEditingCardId(null);
+    load().catch((err: unknown) => {
+      setError(err instanceof Error ? err.message : "Failed to load");
+    });
+  }, [load]);
 
   if (loading) {
     return (
@@ -154,13 +223,20 @@ export function BoardShell({ boardId }: { boardId: string }) {
 
   if (error) {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center">
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-3">
         <p className="text-error">{error}</p>
+        <button
+          type="button"
+          onClick={refresh}
+          className="rounded border border-border px-3 py-1.5 text-sm hover:bg-surface"
+        >
+          Retry
+        </button>
       </div>
     );
   }
 
-  if (!data || data.lists.length === 0) {
+  if (lists.length === 0) {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center">
         <p className="text-muted">No lists yet. Add one to get started.</p>
@@ -171,38 +247,65 @@ export function BoardShell({ boardId }: { boardId: string }) {
   return (
     <div className="flex min-h-[100dvh] flex-col">
       <header className="sticky top-0 z-10 border-b border-border bg-surface px-4 py-3">
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="text-lg font-semibold">Board</h1>
-          <span
-            data-testid="realtime-status"
-            className="text-xs uppercase tracking-wide text-muted"
-          >
-            {realtime.status}
-          </span>
-        </div>
+        <h1 className="text-lg font-semibold">Board</h1>
       </header>
+      {notice ? (
+        <p role="status" className="border-b border-warning px-4 py-2 text-sm text-warning">
+          {notice}
+        </p>
+      ) : null}
       <main className="flex-1 overflow-x-auto">
         <div className="flex gap-4 p-4">
-          {data.lists.map((list) => (
-            <div
-              key={list.id}
-              className="w-72 shrink-0 rounded-lg bg-surface p-3"
-            >
-              <h2 className="mb-2 font-medium">{list.name}</h2>
-              <div className="flex flex-col gap-2">
-                {data.cards
-                  .filter((card) => card.list_id === list.id)
-                  .map((card) => (
-                    <div
+          {lists.map((list) => {
+            const cards = cardState.cards.filter(
+              (card) => card.list_id === list.id,
+            );
+            return (
+              <section key={list.id} className="w-72 shrink-0 rounded-lg bg-surface p-3">
+                <h2 className="mb-2 font-medium">{list.name}</h2>
+                <div className="flex flex-col gap-2">
+                  {cards.map((card) => (
+                    <CardItem
                       key={card.id}
-                      className="rounded-md bg-background p-2 shadow-sm"
-                    >
-                      {card.title}
-                    </div>
+                      card={card}
+                      editing={editingCardId === card.id}
+                      editTitle={editTitle}
+                      isPending={isPending(cardState, card.id)}
+                      onEditStart={(target) => {
+                        setEditingCardId(target.id);
+                        setEditTitle(target.title);
+                      }}
+                      onEditChange={setEditTitle}
+                      onEditSave={() => {
+                        if (editingCardId) {
+                          void saveCardTitle(editingCardId, editTitle);
+                        }
+                      }}
+                      onEditCancel={() => setEditingCardId(null)}
+                      onDelete={(target) => void deleteCard(target.id)}
+                    />
                   ))}
-              </div>
-            </div>
-          ))}
+                </div>
+                <div className="mt-3">
+                  <AddCard
+                    adding={addingToListId === list.id}
+                    addTitle={addTitle}
+                    onAddChange={setAddTitle}
+                    onAddSubmit={() => {
+                      const target = addingToListId;
+                      setAddingToListId(null);
+                      const title = addTitle;
+                      setAddTitle("");
+                      if (target) {
+                        void createCard(target, title);
+                      }
+                    }}
+                    onAddCancel={() => setAddingToListId(null)}
+                  />
+                </div>
+              </section>
+            );
+          })}
         </div>
       </main>
     </div>
