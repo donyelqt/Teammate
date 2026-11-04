@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { Card } from "@/../lib/cards/cardReducer";
 
 interface CardItemProps {
@@ -10,9 +10,13 @@ interface CardItemProps {
   onEditSave: () => void;
   onEditCancel: () => void;
   onDelete: (card: Card) => void;
+  onDragStart: (id: string) => void;
+  onDragOver: (id: string) => void;
+  onDragLeave: () => void;
+  onDrop: (draggedId: string, targetId: string) => void;
+  isDraggingOver: boolean;
   isPending: boolean;
 }
-
 export function CardItem({
   card,
   editing,
@@ -22,10 +26,16 @@ export function CardItem({
   onEditSave,
   onEditCancel,
   onDelete,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  isDraggingOver,
   isPending,
 }: CardItemProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-
+  const [_dragOver, setDragOver] = useState(false);
+  // dragOver is used for drag visual feedback
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter") {
@@ -38,6 +48,39 @@ export function CardItem({
     },
     [onEditSave, onEditCancel],
   );
+
+  const handleDragStart = useCallback(
+    (event: React.DragEvent) => {
+      event.dataTransfer.setData("card/id", card.id);
+      event.dataTransfer.setData("card/list_id", card.list_id);
+      event.dataTransfer.effectAllowed = "move";
+      onDragStart(card.id);
+    },
+    [card.id, card.list_id, onDragStart],
+  );
+
+  const handleDragOver = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      onDragOver(card.id);
+    },
+    [card.id, onDragOver],
+  );
+
+  const handleDragEnter = useCallback(() => {
+    setDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOver(false);
+    onDragLeave();
+  }, [onDragLeave]);
+
+  const handleDrop = useCallback(() => {
+    setDragOver(false);
+    onDrop(card.id, card.id);
+  }, [card.id, onDrop]);
 
   if (editing) {
     return (
@@ -76,8 +119,14 @@ export function CardItem({
   return (
     <div
       className={`group flex items-center justify-between gap-2 rounded-md bg-background p-2 shadow-sm ${
-        isPending ? "opacity-60" : ""
+        isDraggingOver ? "border-accent" : isPending ? "opacity-60" : ""
       }`}
+      draggable
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
       <span
         className="cursor-pointer text-sm hover:text-accent"
@@ -106,6 +155,7 @@ export function CardItem({
 interface AddCardProps {
   adding: boolean;
   addTitle: string;
+  onAddStart: () => void;
   onAddChange: (title: string) => void;
   onAddSubmit: () => void;
   onAddCancel: () => void;
@@ -114,6 +164,7 @@ interface AddCardProps {
 export function AddCard({
   adding,
   addTitle,
+  onAddStart,
   onAddChange,
   onAddSubmit,
   onAddCancel,
@@ -133,9 +184,9 @@ export function AddCard({
 
   if (!adding) {
     return (
-      <button
+<button
         type="button"
-        onClick={() => onAddChange("")}
+        onClick={onAddStart}
         className="w-full rounded-md border border-dashed border-border px-2 py-1.5 text-sm text-muted hover:bg-surface"
       >
         + Add a card
@@ -153,7 +204,7 @@ export function AddCard({
         onBlur={onAddSubmit}
         placeholder="Enter a card title…"
         autoFocus
-        className="w-full rounded border border-border bg-background px-2 py-1 text-sm outline-none focus:border-accent"
+        className="w-full rounded border border-border bg-surface px-2 py-1 text-sm outline-none focus:border-accent"
       />
       <div className="flex justify-end gap-2">
         <button
