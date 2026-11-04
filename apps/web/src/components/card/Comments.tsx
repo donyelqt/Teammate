@@ -62,7 +62,7 @@ export function Comments({
                   type="button"
                   onClick={() => onDelete(comment.id)}
                   aria-label="Delete comment"
-                  className="shrink-0 text-muted hover:text-error"
+                  className="shrink-0 text-muted hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 rounded"
                 >
                   ×
                 </button>
@@ -71,22 +71,26 @@ export function Comments({
           ))}
         </div>
       )}
+      <label className="sr-only" htmlFor="comment-body">
+        Write a comment
+      </label>
       <textarea
+        id="comment-body"
         value={body}
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Write a comment…"
         rows={2}
-        className="w-full rounded border border-border bg-surface px-2 py-1 text-sm outline-none focus:border-accent"
+        className="w-full rounded border border-border bg-surface px-2 py-1 text-sm outline-none focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
       />
       <div className="flex justify-end">
         <button
           type="button"
           onClick={handleAdd}
           disabled={!body.trim()}
-          className="rounded bg-accent px-2 py-1 text-xs text-white hover:opacity-90 disabled:opacity-50"
+          className="rounded bg-accent px-2 py-1 text-xs text-accent-foreground hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
-          CardComment
+          Comment
         </button>
       </div>
     </div>
