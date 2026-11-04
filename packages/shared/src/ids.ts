@@ -1,17 +1,23 @@
-declare const brand: unique symbol;
+declare const UuidBrand: unique symbol;
+declare const WorkspaceIdBrand: unique symbol;
+declare const BoardIdBrand: unique symbol;
+declare const ListIdBrand: unique symbol;
+declare const CardIdBrand: unique symbol;
+declare const CommentIdBrand: unique symbol;
+declare const UserIdBrand: unique symbol;
 
-type Brand<name extends string> = {
-  readonly [brand]: name;
+export type Uuid = string & { readonly [UuidBrand]: "Uuid" };
+
+export type WorkspaceId = string & {
+  readonly [WorkspaceIdBrand]: "WorkspaceId";
 };
-
-export type Uuid = string & Brand<"Uuid">;
-
-export type WorkspaceId = Uuid & Brand<"WorkspaceId">;
-export type BoardId = Uuid & Brand<"BoardId">;
-export type ListId = Uuid & Brand<"ListId">;
-export type CardId = Uuid & Brand<"CardId">;
-export type CommentId = Uuid & Brand<"CommentId">;
-export type UserId = Uuid & Brand<"UserId">;
+export type BoardId = string & { readonly [BoardIdBrand]: "BoardId" };
+export type ListId = string & { readonly [ListIdBrand]: "ListId" };
+export type CardId = string & { readonly [CardIdBrand]: "CardId" };
+export type CommentId = string & {
+  readonly [CommentIdBrand]: "CommentId";
+};
+export type UserId = string & { readonly [UserIdBrand]: "UserId" };
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
