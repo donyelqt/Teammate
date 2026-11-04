@@ -10,7 +10,8 @@ export interface Card {
 export type CardMutation =
   | { kind: "create"; card: Card }
   | { kind: "update"; cardId: CardId; title: string }
-  | { kind: "delete"; cardId: CardId };
+  | { kind: "delete"; cardId: CardId }
+  | { kind: "move"; cardId: CardId; listId: ListId; position: number };
 
 export interface CardState {
   cards: Card[];
@@ -55,6 +56,16 @@ export function cardReducer(state: CardState, action: CardAction): CardState {
       if (m.kind === "delete") {
         return {
           cards: state.cards.filter((c) => c.id !== m.cardId),
+          pending: new Set(state.pending).add(m.cardId),
+        };
+      }
+      if (m.kind === "move") {
+        return {
+          cards: state.cards.map((c) =>
+            c.id === m.cardId
+              ? { ...c, list_id: m.listId, position: m.position }
+              : c,
+          ),
           pending: new Set(state.pending).add(m.cardId),
         };
       }
