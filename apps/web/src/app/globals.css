@@ -5,17 +5,24 @@
 @theme {
   --color-primary: #0d9488;
   --color-primary-foreground: #f0fdfa;
-  --color-accent: #ea580c;
-  --color-accent-foreground: #fff7ed;
+  --color-accent: #9a3412;
+  --color-accent-foreground: #ffffff;
   --color-surface: #f9fafb;
   --color-surface-foreground: #18181b;
+  --color-surface-2: #f4f4f5;
+  --color-background: #ffffff;
+  --color-foreground: #18181b;
+  --color-muted: #71717a;
+  --color-error: #991b1b;
+  --color-warning: #7c2d12;
+  --color-success: #15803d;
   --color-border: #d4d4d8;
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-:root {
+::root {
   color-scheme: light dark;
 }
 
@@ -23,4 +30,36 @@ body {
   background-color: var(--color-surface);
   color: var(--color-surface-foreground);
   font-family: var(--font-sans);
+}
+
+/* Dark theme via OS preference. Tokens flip so every text/background pair
+   stays >= 4.5:1 in both modes. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #2dd4bf;
+    --color-primary-foreground: #0f172a;
+    --color-accent: #ea580c;
+    --color-accent-foreground: #1a1a1a;
+    --color-surface: #18181b;
+    --color-surface-foreground: #f4f4f5;
+    --color-surface-2: #27272a;
+    --color-background: #09090b;
+    --color-foreground: #f4f4f5;
+    --color-muted: #b8b8c0;
+    --color-error: #f87171;
+    --color-warning: #fbbf24;
+    --color-success: #4ade80;
+    --color-border: #3f3f46;
+  }
+}
+
+/* Honor OS reduced-motion: kill all transitions/animations globally. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
