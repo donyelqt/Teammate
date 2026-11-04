@@ -118,21 +118,21 @@ export function CardItem({
           onKeyDown={handleKeyDown}
           onBlur={onEditSave}
           placeholder="Card title…"
-          className="w-full rounded border border-border bg-surface px-2 py-1 text-sm outline-none focus:border-accent"
+          className="w-full rounded border border-border bg-surface px-2 py-1 text-sm outline-none focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
           autoFocus
         />
         <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={onEditSave}
-            className="rounded bg-accent px-2 py-1 text-xs text-white hover:opacity-90"
+            className="rounded bg-accent px-2 py-1 text-xs text-accent-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
           >
             Save
           </button>
           <button
             type="button"
             onClick={onEditCancel}
-            className="rounded border border-border px-2 py-1 text-xs hover:bg-surface"
+            className="rounded border border-border px-2 py-1 text-xs hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
           >
             Cancel
           </button>
@@ -156,12 +156,15 @@ export function CardItem({
       <div className="flex flex-col gap-2 w-full">
         <div className="flex items-center gap-2">
           <span
-            className="cursor-pointer text-sm hover:text-accent"
+            role="button"
+            tabIndex={0}
+            aria-label={`Edit card: ${card.title || "Untitled"}`}
+            className="cursor-pointer text-sm hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 rounded"
             onClick={() => onEditStart(card)}
-            onAuxClick={(e) => {
-              if (e.button === 1) {
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                onDelete(card);
+                onEditStart(card);
               }
             }}
           >
@@ -184,7 +187,7 @@ export function CardItem({
             type="button"
             onClick={() => onDelete(card)}
             aria-label="Delete card"
-            className="hidden text-muted hover:text-error group-hover:block"
+            className="hidden text-muted hover:text-error group-hover:block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 rounded"
           >
             ×
           </button>
@@ -234,21 +237,21 @@ export function CardItem({
         <button
           type="button"
           onClick={() => onEditLabels(card.id, [...card.labels as string[]])}
-          className="rounded border border-border px-2 py-1 text-xs text-muted hover:bg-surface"
+          className="rounded border border-border px-2 py-1 text-xs text-muted hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
           Labels
         </button>
         <button
           type="button"
           onClick={() => onEditAssignees(card.id, [...card.assignee_ids])}
-          className="rounded border border-border px-2 py-1 text-xs text-muted hover:bg-surface"
+          className="rounded border border-border px-2 py-1 text-xs text-muted hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
           Assignees
         </button>
         <button
           type="button"
           onClick={() => onEditDueDate(card.id, card.due_at)}
-          className="rounded border border-border px-2 py-1 text-xs text-muted hover:bg-surface"
+          className="rounded border border-border px-2 py-1 text-xs text-muted hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
           Due date
         </button>
@@ -292,7 +295,7 @@ export function AddCard({
       <button
         type="button"
         onClick={() => onAddChange("")}
-        className="w-full rounded-md border border-dashed border-border px-2 py-1.5 text-sm text-muted hover:bg-surface"
+          className="w-full rounded-md border border-dashed border-border px-2 py-1.5 text-sm text-muted hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
       >
         + Add a card
       </button>
@@ -309,20 +312,20 @@ export function AddCard({
         onBlur={onAddSubmit}
         placeholder="Enter a card title…"
         autoFocus
-        className="w-full rounded border border-border bg-surface px-2 py-1 text-sm outline-none focus:border-accent"
+          className="w-full rounded border border-border bg-surface px-2 py-1 text-sm outline-none focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
       />
       <div className="flex justify-end gap-2">
         <button
           type="button"
           onClick={onAddSubmit}
-          className="rounded bg-accent px-2 py-1 text-xs text-white hover:opacity-90"
+          className="rounded bg-accent px-2 py-1 text-xs text-accent-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
           Add card
         </button>
         <button
           type="button"
           onClick={onAddCancel}
-          className="rounded border border-border px-2 py-1 text-xs hover:bg-background"
+          className="rounded border border-border px-2 py-1 text-xs hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
           Cancel
         </button>
