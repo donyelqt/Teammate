@@ -73,6 +73,12 @@
   - Verify: unit test on mount/unmount; two-window convergence smoke
   - Files: `apps/web/lib/realtime/useRealtimeChannel.ts`
   - Scope: Medium
+  - Note: `supabase_realtime` publication was missing every app table, so no
+    row ever reached a subscriber. Added `supabase/migrations/002_realtime_publication.sql`.
+    The hook also filtered on a nonexistent `cards.board_id` column, demanded a
+    `board_id` field in every payload row, and matched only numeric `eventType`
+    codes while Supabase sends strings. All three dropped every event.
+    Fixed and proven: two windows, INSERT/UPDATE/DELETE all converge live.
 
 - [x] Task 11: Optimistic queue with ULID ids and echo dedup
   - Acceptance: remote echo for a queued id updates rather than appends; no duplicate card on reconnect
