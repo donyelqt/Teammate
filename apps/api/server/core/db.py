@@ -1,7 +1,7 @@
 """Pooled asyncpg access.
 
 Connects as the Postgres superuser and steps into the `authenticated` role
-per request, so Supabase RLS policies (which key off `auth.uid()` →
+per request, so Supabase RLS policies (which key off `auth.uid()` ->
 `request.jwt.claim.sub`) actually gate every query. A direct `authenticated`
 connection is impossible: that role is not login-capable, and connecting as
 `postgres` bypasses RLS entirely.
@@ -20,11 +20,13 @@ from .config import get_settings
 _pool: asyncpg.Pool | None = None
 
 
-async def get_db_pool() -> asyncpg.Pool:
-    """Return the process-wide connection pool, creating it on first call."""
+async def get_db_pool() -> asyncpg.Pool | None:
+    """Return the process-wide connection pool, or None when no URL is configured."""
     global _pool
     if _pool is None:
         settings = get_settings()
+        if not settings.database_url:
+            return None
         _pool = await asyncpg.create_pool(
             settings.database_url,
             min_size=1,
@@ -40,6 +42,8 @@ async def get_db() -> asyncpg.Connection:
     connection never carries the previous request's role or claim.
     """
     pool = await get_db_pool()
+    if pool is None:
+        raise RuntimeError("database pool is not configured")
     async with pool.acquire() as conn:
         try:
             yield conn
