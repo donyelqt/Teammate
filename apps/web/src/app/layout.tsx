@@ -49,7 +49,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <header>
+        <header aria-label="Workspace switcher">
           <WorkspaceSwitcher
             workspaces={workspaces}
             currentWorkspaceId={currentWorkspaceId}
