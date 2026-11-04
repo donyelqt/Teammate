@@ -13,10 +13,13 @@ const CardRowSchema = {
     if (typeof r["title"] !== "string") throw new Error("invalid title");
     if (typeof r["position"] !== "number") throw new Error("invalid position");
     return {
-      id: r["id"],
-      list_id: r["list_id"],
-      title: r["title"],
-      position: r["position"],
+      id: r["id"] as CardId,
+      list_id: r["list_id"] as ListId,
+      title: r["title"] as string,
+      position: r["position"] as number,
+      labels: Array.isArray(r["labels"]) ? (r["labels"] as string[]) : [],
+      assignee_ids: Array.isArray(r["assignee_ids"]) ? (r["assignee_ids"] as CardId[]) : [],
+      due_at: (r["due_at"] as string | null) ?? null,
     };
   },
 };
@@ -38,7 +41,7 @@ export interface CardRepository {
     position: number;
     userId: UserId;
   }): Promise<Card>;
-  update(cardId: CardId, title: string): Promise<Card>;
+  update(cardId: CardId, patch: { title?: string; labels?: string[]; assignee_ids?: string[]; due_at?: string | null }): Promise<Card>;
   move(cardId: CardId, listId: ListId, position: number): Promise<void>;
   delete(cardId: CardId): Promise<void>;
 }
@@ -55,7 +58,7 @@ export function createCardRepository(
         .in("list_id", listIds)
         .is("archived_at", null);
       if (error) throw new Error(error.message);
-      return (data ?? []).map((r) => toCard(r)!).filter(Boolean);
+      return (data ?? []).map((r) => toCard(r)!).filter(Boolean) as Card[];
     },
     async create(input: {
       listId: ListId;
@@ -78,12 +81,17 @@ export function createCardRepository(
       if (error) throw new Error(error.message);
       return toCard(data)!;
     },
-    async update(cardId: CardId, title: string): Promise<Card> {
+    async update(cardId: CardId, patch: { title?: string; labels?: string[]; assignee_ids?: string[]; due_at?: string | null }): Promise<Card> {
       const { data, error } = await client
         .from("cards")
-        .update({ title })
+        .update({
+          ...(patch.title !== undefined ? { title: patch.title } : {}),
+          ...(patch.labels !== undefined ? { labels: patch.labels } : {}),
+          ...(patch.assignee_ids !== undefined ? { assignee_ids: patch.assignee_ids } : {}),
+          ...(patch.due_at !== undefined ? { due_at: patch.due_at } : {}),
+        })
         .eq("id", cardId)
-        .select("id, list_id, title, position")
+        .select("id, list_id, title, position, labels, assignee_ids, due_at")
         .single();
       if (error) throw new Error(error.message);
       return toCard(data)!;
