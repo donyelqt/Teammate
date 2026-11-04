@@ -6,6 +6,7 @@ export {
   isUserId,
   isUuid,
   isWorkspaceId,
+  isWorkspaceRole,
 } from "./ids.js";
 export type {
   BoardId,
@@ -15,6 +16,7 @@ export type {
   UserId,
   Uuid,
   WorkspaceId,
+  WorkspaceRole,
 } from "./ids.js";
 
 export { syncBadge } from "./sync-state.js";
