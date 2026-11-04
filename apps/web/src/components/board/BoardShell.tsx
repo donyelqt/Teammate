@@ -69,7 +69,7 @@ export function BoardShell({ boardId }: { boardId: string }) {
     if (token) {
       try {
         const parts = token.split(".");
-        const payload = parts[1];
+        const payload = parts[1]!;
         if (!payload) throw new Error("no payload");
         const sub = JSON.parse(
           atob(payload.replace(/-/g, "+").replace(/_/g, "/")),
@@ -129,7 +129,7 @@ export function BoardShell({ boardId }: { boardId: string }) {
       }
       return;
     }
-    const card = event.card;
+    const card = event.card as Card;
     if (!listIdsRef.current.includes(card.list_id)) return;
     dispatch({ type: "remoteUpsert", card });
   }, []);
@@ -162,6 +162,9 @@ export function BoardShell({ boardId }: { boardId: string }) {
         list_id: listId,
         title: trimmed,
         position,
+        labels: [],
+        assignee_ids: [],
+        due_at: null,
       };
       dispatch({
         type: "optimistic",
@@ -188,27 +191,42 @@ export function BoardShell({ boardId }: { boardId: string }) {
     [cardState.cards],
   );
 
-  const saveCardTitle = useCallback(
-    async (cardId: CardId, title: string) => {
+  const saveCard = useCallback(
+    async (cardId: CardId, patch: { title?: string; labels?: string[]; assignee_ids?: CardId[]; due_at?: string | null }) => {
       const repo = repositoryRef.current;
-      const trimmed = title.trim();
-      if (!repo || !trimmed) {
-        setEditingCardId(null);
-        return;
-      }
+      if (!repo) return;
       dispatch({
         type: "optimistic",
-        mutation: { kind: "update", cardId, title: trimmed },
+        mutation: { kind: "update", cardId, ...patch },
       });
       try {
-        await repo.update(cardId, trimmed);
+        await repo.update(cardId, patch);
         dispatch({ type: "ack", cardId });
       } catch {
         setNotice("Could not save card. Reload to resync.");
       }
-      setEditingCardId(null);
     },
     [],
+  );
+  const onEditLabels = useCallback(
+    (cardId: string, labels: string[]) => {
+      void saveCard(cardId as CardId, { labels });
+    },
+    [saveCard],
+  );
+
+  const onEditAssignees = useCallback(
+    (cardId: string, assignee_ids: string[]) => {
+      void saveCard(cardId as CardId, { assignee_ids: assignee_ids as CardId[] });
+    },
+    [saveCard],
+  );
+
+  const onEditDueDate = useCallback(
+    (cardId: string, due_at: string | null) => {
+      void saveCard(cardId as CardId, { due_at });
+    },
+    [saveCard],
   );
 
   const deleteCard = useCallback(async (cardId: CardId) => {
@@ -223,17 +241,23 @@ export function BoardShell({ boardId }: { boardId: string }) {
     }
   }, []);
 
-  const moveCard = useCallback(async (cardId: CardId, listId: ListId, position: number) => {
-    const repo = repositoryRef.current;
-    if (!repo) return;
-    dispatch({ type: "optimistic", mutation: { kind: "move", cardId, listId, position } });
-    try {
-      await repo.move(cardId, listId, position);
-      dispatch({ type: "ack", cardId });
-    } catch {
-      setNotice("Could not move card. Reload to resync.");
-    }
-  }, []);
+  const moveCard = useCallback(
+    async (cardId: CardId, listId: ListId, position: number) => {
+      const repo = repositoryRef.current;
+      if (!repo) return;
+      dispatch({
+        type: "optimistic",
+        mutation: { kind: "move", cardId, listId, position },
+      });
+      try {
+        await repo.move(cardId, listId, position);
+        dispatch({ type: "ack", cardId });
+      } catch {
+        setNotice("Could not move card. Reload to resync.");
+      }
+    },
+    [],
+  );
 
   const refresh = useCallback(() => {
     setNotice(null);
@@ -310,25 +334,44 @@ export function BoardShell({ boardId }: { boardId: string }) {
                       onEditChange={setEditTitle}
                       onEditSave={() => {
                         if (editingCardId) {
-                          void saveCardTitle(editingCardId, editTitle);
+                          void saveCard(editingCardId, { title: editTitle });
                         }
                       }}
                       onEditCancel={() => setEditingCardId(null)}
+                      onEditLabels={(cardId: string, labels: string[]) =>
+                        void onEditLabels(cardId, labels)
+                      }
+                      onEditAssignees={(cardId: string, assignee_ids: string[]) =>
+                        void onEditAssignees(cardId, assignee_ids)
+                      }
+                      onEditDueDate={(cardId: string, due_at: string | null) =>
+                        void onEditDueDate(cardId, due_at)
+                      }
                       onDelete={(target) => void deleteCard(target.id)}
                       onDragStart={(id) => {
                         draggedCardIdRef.current = id as CardId;
                       }}
                       onDragOver={(draggedCardId: string) => {
-                        setDragOverCardId(card.id === draggedCardId ? null : card.id);
+                        setDragOverCardId(
+                          card.id === draggedCardId ? null : card.id,
+                        );
                       }}
                       onDragLeave={() => setDragOverCardId(null)}
                       onDrop={(draggedCardId: string) => {
                         const targetId = card.id;
                         if (draggedCardId && draggedCardId !== targetId) {
-                          const draggedCard = cardState.cards.find((c) => c.id === draggedCardId);
-                          const targetCard = cardState.cards.find((c) => c.id === targetId);
+                          const draggedCard = cardState.cards.find(
+                            (c) => c.id === draggedCardId,
+                          );
+                          const targetCard = cardState.cards.find(
+                            (c) => c.id === targetId,
+                          );
                           if (draggedCard && targetCard) {
-                            void moveCard(draggedCardId as CardId, targetCard.list_id, targetCard.position);
+                            void moveCard(
+                              draggedCardId as CardId,
+                              targetCard.list_id,
+                              targetCard.position,
+                            );
                           }
                         }
                       }}
