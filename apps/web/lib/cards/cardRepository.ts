@@ -32,11 +32,14 @@ export function toCard(row: unknown): Card | null {
 export interface CardRepository {
   list(listIds: readonly ListId[]): Promise<Card[]>;
   create(input: {
+    id: CardId;
     listId: ListId;
     title: string;
+    position: number;
     userId: UserId;
   }): Promise<Card>;
   update(cardId: CardId, title: string): Promise<Card>;
+  move(cardId: CardId, listId: ListId, position: number): Promise<void>;
   delete(cardId: CardId): Promise<void>;
 }
 
@@ -84,6 +87,13 @@ export function createCardRepository(
         .single();
       if (error) throw new Error(error.message);
       return toCard(data)!;
+    },
+    async move(cardId: CardId, listId: ListId, position: number): Promise<void> {
+      const { error } = await client
+        .from("cards")
+        .update({ list_id: listId, position })
+        .eq("id", cardId);
+      if (error) throw new Error(error.message);
     },
     async delete(cardId: CardId): Promise<void> {
       const { error } = await client
