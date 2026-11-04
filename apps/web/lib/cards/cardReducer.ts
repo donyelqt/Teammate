@@ -5,11 +5,14 @@ export interface Card {
   list_id: ListId;
   title: string;
   position: number;
+  labels: readonly string[];
+  assignee_ids: readonly CardId[];
+  due_at: string | null;
 }
 
 export type CardMutation =
   | { kind: "create"; card: Card }
-  | { kind: "update"; cardId: CardId; title: string }
+  | { kind: "update"; cardId: CardId; title?: string; labels?: string[]; assignee_ids?: CardId[]; due_at?: string | null }
   | { kind: "delete"; cardId: CardId }
   | { kind: "move"; cardId: CardId; listId: ListId; position: number };
 
@@ -47,9 +50,15 @@ export function cardReducer(state: CardState, action: CardAction): CardState {
       }
       if (m.kind === "update") {
         return {
-          cards: state.cards.map((c) =>
-            c.id === m.cardId ? { ...c, title: m.title } : c,
-          ),
+          cards: state.cards.map((c) => {
+            if (c.id !== m.cardId) return c;
+            const patch: Partial<Card> = {};
+            if (m.title !== undefined) patch.title = m.title;
+            if (m.labels !== undefined) patch.labels = m.labels;
+            if (m.assignee_ids !== undefined) patch.assignee_ids = m.assignee_ids;
+            if (m.due_at !== undefined) patch.due_at = m.due_at;
+            return { ...c, ...patch };
+          }),
           pending: new Set(state.pending).add(m.cardId),
         };
       }
