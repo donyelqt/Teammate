@@ -51,6 +51,8 @@ export function BoardShell({ boardId }: { boardId: string }) {
   const [addTitle, setAddTitle] = useState("");
   const [editingCardId, setEditingCardId] = useState<CardId | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [dragOverCardId, setDragOverCardId] = useState<CardId | null>(null);
+  const draggedCardIdRef = useRef<CardId | null>(null);
 
   const listIdsRef = useRef<ListId[]>([]);
   const repositoryRef = useRef<ReturnType<typeof createCardRepository> | null>(
@@ -221,6 +223,18 @@ export function BoardShell({ boardId }: { boardId: string }) {
     }
   }, []);
 
+  const moveCard = useCallback(async (cardId: CardId, listId: ListId, position: number) => {
+    const repo = repositoryRef.current;
+    if (!repo) return;
+    dispatch({ type: "optimistic", mutation: { kind: "move", cardId, listId, position } });
+    try {
+      await repo.move(cardId, listId, position);
+      dispatch({ type: "ack", cardId });
+    } catch {
+      setNotice("Could not move card. Reload to resync.");
+    }
+  }, []);
+
   const refresh = useCallback(() => {
     setNotice(null);
     setAddingToListId(null);
@@ -288,6 +302,7 @@ export function BoardShell({ boardId }: { boardId: string }) {
                       editing={editingCardId === card.id}
                       editTitle={editTitle}
                       isPending={isPending(cardState, card.id)}
+                      isDraggingOver={dragOverCardId === card.id}
                       onEditStart={(target) => {
                         setEditingCardId(target.id);
                         setEditTitle(target.title);
@@ -300,6 +315,23 @@ export function BoardShell({ boardId }: { boardId: string }) {
                       }}
                       onEditCancel={() => setEditingCardId(null)}
                       onDelete={(target) => void deleteCard(target.id)}
+                      onDragStart={(id) => {
+                        draggedCardIdRef.current = id as CardId;
+                      }}
+                      onDragOver={(draggedCardId: string) => {
+                        setDragOverCardId(card.id === draggedCardId ? null : card.id);
+                      }}
+                      onDragLeave={() => setDragOverCardId(null)}
+                      onDrop={(draggedCardId: string) => {
+                        const targetId = card.id;
+                        if (draggedCardId && draggedCardId !== targetId) {
+                          const draggedCard = cardState.cards.find((c) => c.id === draggedCardId);
+                          const targetCard = cardState.cards.find((c) => c.id === targetId);
+                          if (draggedCard && targetCard) {
+                            void moveCard(draggedCardId as CardId, targetCard.list_id, targetCard.position);
+                          }
+                        }
+                      }}
                     />
                   ))}
                 </div>
