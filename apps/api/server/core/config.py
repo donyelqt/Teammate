@@ -10,7 +10,10 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO")
     database_url: str = Field(default="")
     supabase_url: str = Field(default="")
-    supabase_jwt_secret: str = Field(default="")
+    supabase_jwt_secret: str = Field(
+        default="super-secret-jwt-token-with-at-least-32-characters-long",
+        description="HS256 secret Supabase signs JWTs with.",
+    )
 
 
 @lru_cache
