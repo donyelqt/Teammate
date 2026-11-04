@@ -62,11 +62,22 @@ export function BoardShell({ boardId }: { boardId: string }) {
     const supabase = createClient();
     repositoryRef.current = createCardRepository(supabase);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user && isUserId(user.id)) {
-      userIdRef.current = user.id;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (token) {
+      try {
+        const parts = token.split(".");
+        const payload = parts[1];
+        if (!payload) throw new Error("no payload");
+        const sub = JSON.parse(
+          atob(payload.replace(/-/g, "+").replace(/_/g, "/")),
+        ).sub;
+        if (sub && isUserId(sub)) {
+          userIdRef.current = sub;
+        }
+      } catch {
+        // ignore malformed token; inserts will surface the RLS error
+      }
     }
 
     const { data: listRows, error: listError } = await supabase
@@ -134,7 +145,7 @@ export function BoardShell({ boardId }: { boardId: string }) {
       const userId = userIdRef.current;
       if (!trimmed || !repo || !userId) return;
 
-      const cardId = ulidToUUID(ulid()) as CardId;
+      const cardId = ulidToUUID(ulid()).toLowerCase() as CardId;
       const position =
         cardState.cards.filter((c) => c.list_id === listId).length > 0
           ? Math.max(
@@ -156,7 +167,13 @@ export function BoardShell({ boardId }: { boardId: string }) {
       });
 
       try {
-        await repo.create({ listId, title: trimmed, userId });
+        await repo.create({
+          id: cardId,
+          listId,
+          title: trimmed,
+          position,
+          userId,
+        });
         dispatch({ type: "ack", cardId });
       } catch (err: unknown) {
         setNotice(
@@ -290,6 +307,10 @@ export function BoardShell({ boardId }: { boardId: string }) {
                   <AddCard
                     adding={addingToListId === list.id}
                     addTitle={addTitle}
+                    onAddStart={() => {
+                      setAddingToListId(list.id);
+                      setAddTitle("");
+                    }}
                     onAddChange={setAddTitle}
                     onAddSubmit={() => {
                       const target = addingToListId;
