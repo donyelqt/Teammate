@@ -58,7 +58,7 @@ export function RoleSelector({
       <h3 className="mb-3 text-sm font-medium text-zinc-300">Members</h3>
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-left text-zinc-400">
+          <tr className="text-left text-muted">
             <th className="pb-2">Name</th>
             <th className="pb-2">Email</th>
             <th className="pb-2">Role</th>
@@ -70,17 +70,25 @@ export function RoleSelector({
             const disabled = !canManage || isSelf;
             return (
               <tr key={member.userId} className="border-t border-zinc-800">
-                <td className="py-2 text-zinc-100">
+                <td className="py-2 text-foreground">
                   {member.displayName || "—"}
                 </td>
-                <td className="py-2 text-zinc-400">{member.email || "—"}</td>
+                <td className="py-2 text-muted">{member.email || "—"}</td>
                 <td className="py-2">
                   <span
                     className={`mr-2 inline-block rounded px-2 py-0.5 text-xs ${ROLE_BADGE[member.role] ?? ""}`}
                   >
                     {member.role}
                   </span>
+                  <label
+                    className="sr-only"
+                    htmlFor={`role-${member.userId}`}
+                  >
+                    Role for {member.displayName || member.userId}
+                  </label>
                   <select
+                    id={`role-${member.userId}`}
+                    aria-label={`Role for ${member.displayName || member.userId}`}
                     value={member.role}
                     disabled={disabled}
                     onChange={(e) =>
@@ -89,7 +97,7 @@ export function RoleSelector({
                         e.target.value as "owner" | "admin" | "member" | "viewer",
                       )
                     }
-                    className="rounded-md bg-zinc-800 px-2 py-1 text-xs text-zinc-100 disabled:opacity-50"
+                    className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-foreground disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                   >
                     {ROLES.map((r) => (
                       <option key={r} value={r}>
