@@ -1,6 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import type { Card } from "@/../lib/cards/cardReducer";
 
+import type { CardComment } from "@/lib/cards/commentRepository";
+import { Comments } from "./Comments";
 interface CardItemProps {
   card: Card;
   editing: boolean;
@@ -19,6 +21,11 @@ interface CardItemProps {
   onEditLabels: (cardId: string, labels: string[]) => void;
   onEditAssignees: (cardId: string, assignee_ids: string[]) => void;
   onEditDueDate: (cardId: string, due_at: string | null) => void;
+  presence: string[];
+  comments: CardComment[];
+  currentUserId: string | null;
+  onAddComment: (body: string) => void;
+  onDeleteComment: (commentId: string) => void;
 }
 
 export function CardItem({
@@ -39,6 +46,11 @@ export function CardItem({
   onEditLabels,
   onEditAssignees,
   onEditDueDate,
+  presence,
+  comments,
+  currentUserId,
+  onAddComment,
+  onDeleteComment,
 }: CardItemProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -154,6 +166,19 @@ export function CardItem({
             }}
           >
             {card.title || "Untitled"}
+            {comments.length > 0 && (
+              <span className="flex items-center gap-1 rounded bg-accent/10 px-1.5 py-0.5 text-xs text-accent">
+                💬 {comments.length}
+              </span>
+            )}
+            {presence.length > 0 && (
+              <span
+                title={`Editing: ${presence.join(", ")}`}
+                className="flex items-center gap-1 rounded bg-accent/10 px-1.5 py-0.5 text-xs text-accent"
+              >
+                ✏️ {presence.length}
+              </span>
+            )}
           </span>
           <button
             type="button"
@@ -196,6 +221,13 @@ export function CardItem({
             <span className="text-xs text-muted">📅 {card.due_at}</span>
           </div>
         )}
+        <Comments
+          cardId={card.id}
+          comments={comments}
+          currentUserId={currentUserId}
+          onAdd={onAddComment}
+          onDelete={onDeleteComment}
+        />
       </div>
 
       <div className="flex justify-end gap-2 pt-1">
