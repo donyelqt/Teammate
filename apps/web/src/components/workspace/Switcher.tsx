@@ -157,9 +157,7 @@ export function WorkspaceSwitcher({
         type="button"
         className={`workspace-switcher-item ${
           idx === focusedIndex ? "focused" : ""
-        } ${ws.id === currentWorkspaceId ? "active" : ""}`}
-        onClick={() => handleSelect(ws.id)}
-        onMouseEnter={() => setFocusedIndex(idx)}
+        } ${ws.id === currentWorkspaceId ? "active" : ""} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 rounded`}
       >
         <span className="workspace-switcher-name">{ws.name}</span>
         <span className="workspace-switcher-role">{ws.role}</span>
@@ -175,12 +173,8 @@ export function WorkspaceSwitcher({
       onKeyDown={handleKeyDown}
     >
       <button
-        type="button"
-        className="workspace-switcher-trigger"
-        onClick={handleToggle}
-        onKeyDown={handleTriggerKeyDown}
-        aria-expanded={isOpen}
-        aria-haspopup="listbox"
+        aria-label={`Switch to ${currentWorkspace ? currentWorkspace.name : "select workspace"}`}
+        className="workspace-switcher-trigger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 rounded"
       >
         <span className="workspace-switcher-current">
           {currentWorkspace ? currentWorkspace.name : "Select workspace"}
@@ -208,24 +202,40 @@ export function WorkspaceSwitcher({
               onSubmit={handleCreateSubmit}
               onKeyDown={handleCreateKeyDown}
             >
+              <label className="sr-only" htmlFor="ws-name">
+                Workspace name
+              </label>
               <input
+                id="ws-name"
                 type="text"
                 placeholder="Workspace name"
                 value={createName}
                 onChange={(e) => setCreateName(e.target.value)}
                 autoFocus
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 rounded px-2 py-1"
               />
+              <label className="sr-only" htmlFor="ws-slug">
+                Slug
+              </label>
               <input
+                id="ws-slug"
                 type="text"
                 placeholder="slug"
                 value={createSlug}
                 onChange={(e) => setCreateSlug(e.target.value)}
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 rounded px-2 py-1"
               />
               <div className="workspace-switcher-create-actions">
-                <button type="submit">Create</button>
+                <button
+                  type="submit"
+                  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 rounded px-2 py-1"
+                >
+                  Create
+                </button>
                 <button
                   type="button"
                   onClick={handleCreateCancel}
+                  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 rounded px-2 py-1"
                 >
                   Cancel
                 </button>
@@ -236,6 +246,7 @@ export function WorkspaceSwitcher({
               <button
                 type="button"
                 onClick={() => setShowCreateForm(true)}
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 rounded px-2 py-1"
               >
                 + Create workspace
               </button>
