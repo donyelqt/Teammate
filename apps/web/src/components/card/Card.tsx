@@ -16,7 +16,11 @@ interface CardItemProps {
   onDrop: (draggedId: string, targetId: string) => void;
   isDraggingOver: boolean;
   isPending: boolean;
+  onEditLabels: (cardId: string, labels: string[]) => void;
+  onEditAssignees: (cardId: string, assignee_ids: string[]) => void;
+  onEditDueDate: (cardId: string, due_at: string | null) => void;
 }
+
 export function CardItem({
   card,
   editing,
@@ -32,10 +36,19 @@ export function CardItem({
   onDrop,
   isDraggingOver,
   isPending,
+  onEditLabels,
+  onEditAssignees,
+  onEditDueDate,
 }: CardItemProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [_dragOver, setDragOver] = useState(false);
-  // dragOver is used for drag visual feedback
+  const [dragOver, setDragOver] = useState(false);
+  const [editingLabels, setEditingLabels] = useState(false);
+  const [editingAssignees, setEditingAssignees] = useState(false);
+  const [editingDueDate, setEditingDueDate] = useState(false);
+  const [labelInput, setLabelInput] = useState("");
+  const [assigneeInput, setAssigneeInput] = useState("");
+  const [dueDate, setDueDate] = useState(card.due_at || "");
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter") {
@@ -128,26 +141,86 @@ export function CardItem({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <span
-        className="cursor-pointer text-sm hover:text-accent"
-        onClick={() => onEditStart(card)}
-        onAuxClick={(e) => {
-          if (e.button === 1) {
-            e.preventDefault();
-            onDelete(card);
-          }
-        }}
-      >
-        {card.title || "Untitled"}
-      </span>
-      <button
-        type="button"
-        onClick={() => onDelete(card)}
-        aria-label="Delete card"
-        className="hidden text-muted hover:text-error group-hover:block"
-      >
-        ×
-      </button>
+      <div className="flex flex-col gap-2 w-full">
+        <div className="flex items-center gap-2">
+          <span
+            className="cursor-pointer text-sm hover:text-accent"
+            onClick={() => onEditStart(card)}
+            onAuxClick={(e) => {
+              if (e.button === 1) {
+                e.preventDefault();
+                onDelete(card);
+              }
+            }}
+          >
+            {card.title || "Untitled"}
+          </span>
+          <button
+            type="button"
+            onClick={() => onDelete(card)}
+            aria-label="Delete card"
+            className="hidden text-muted hover:text-error group-hover:block"
+          >
+            ×
+          </button>
+        </div>
+
+        {card.labels.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {card.labels.map((label) => (
+              <span
+                key={label}
+                className="rounded-md bg-accent/10 px-2 py-0.5 text-xs text-accent"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {card.assignee_ids.length > 0 && (
+          <div className="flex gap-1">
+            {card.assignee_ids.map((assigneeId) => (
+              <span
+                key={assigneeId}
+                className="rounded-full bg-surface px-2 py-0.5 text-xs border border-border"
+              >
+                {assigneeId.slice(0, 2).toUpperCase()}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {card.due_at && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted">📅 {card.due_at}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-end gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => onEditLabels(card.id, [...card.labels as string[]])}
+          className="rounded border border-border px-2 py-1 text-xs text-muted hover:bg-surface"
+        >
+          Labels
+        </button>
+        <button
+          type="button"
+          onClick={() => onEditAssignees(card.id, [...card.assignee_ids])}
+          className="rounded border border-border px-2 py-1 text-xs text-muted hover:bg-surface"
+        >
+          Assignees
+        </button>
+        <button
+          type="button"
+          onClick={() => onEditDueDate(card.id, card.due_at)}
+          className="rounded border border-border px-2 py-1 text-xs text-muted hover:bg-surface"
+        >
+          Due date
+        </button>
+      </div>
     </div>
   );
 }
@@ -184,9 +257,9 @@ export function AddCard({
 
   if (!adding) {
     return (
-<button
+      <button
         type="button"
-        onClick={onAddStart}
+        onClick={() => onAddChange("")}
         className="w-full rounded-md border border-dashed border-border px-2 py-1.5 text-sm text-muted hover:bg-surface"
       >
         + Add a card
