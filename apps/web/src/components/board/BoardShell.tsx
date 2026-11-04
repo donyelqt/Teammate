@@ -19,6 +19,18 @@ import {
 import { createCardRepository } from "@/lib/cards/cardRepository";
 import { createClient } from "@/lib/supabase/client";
 import { AddCard, CardItem } from "@/components/card/Card";
+import {
+  createCommentRepository,
+  toComment,
+  type CardComment,
+} from "@/lib/cards/commentRepository";
+import { Comments } from "@/components/card/Comments";
+import { ActivityPanel, type ActivityEvent } from "@/components/board/ActivityPanel";
+import {
+  usePresence,
+  type CardPresence,
+} from "@/lib/realtime/usePresence";
+import { createActivityRepository } from "@/lib/activity/activityRepository";
 
 const ListSchema = z.object({
   id: z.string(),
@@ -59,6 +71,10 @@ export function BoardShell({ boardId }: { boardId: string }) {
     null,
   );
   const userIdRef = useRef<UserId | null>(null);
+  const [commentsByCard, setCommentsByCard] = useState<Record<string, CardComment[]>>({});
+  const [activityEvents, setActivityEvents] = useState<ActivityEvent[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityPanelOpen, setActivityPanelOpen] = useState(false);
 
   const load = useCallback(async () => {
     const supabase = createClient();
@@ -139,6 +155,125 @@ export function BoardShell({ boardId }: { boardId: string }) {
     onEvent: handleEvent,
     listIds: listIdsRef.current,
   });
+  const {
+    presenceByCard,
+    startEditing: startPresenceEditing,
+    stopEditing: stopPresenceEditing,
+  } = usePresence({ boardId: boardIdValue });
+
+  const loadComments = useCallback(async (cardId: string) => {
+    const supabase = createClient();
+    const repo = createCommentRepository(supabase);
+    try {
+      const comments = await repo.list(cardId);
+      setCommentsByCard((prev) => ({ ...prev, [cardId]: comments }));
+    } catch {
+      // ignore; realtime will reconcile
+    }
+  }, []);
+
+  const onAddComment = useCallback(
+    (cardId: string, body: string) => {
+      const userId = userIdRef.current;
+      if (!userId) return;
+      const tempId = ulid();
+      const optimistic: CardComment = {
+        id: tempId,
+        card_id: cardId,
+        author_id: userId,
+        body,
+        created_at: new Date().toISOString(),
+      };
+      setCommentsByCard((prev) => ({
+        ...prev,
+        [cardId]: [...(prev[cardId] ?? []), optimistic],
+      }));
+      const supabase = createClient();
+      const repo = createCommentRepository(supabase);
+      void repo
+        .create(cardId, body, userId)
+        .then((created) => {
+          setCommentsByCard((prev) => ({
+            ...prev,
+            [cardId]: (prev[cardId] ?? []).map((c) =>
+              c.id === tempId ? created : c,
+            ),
+          }));
+        })
+        .catch(() => {
+          setCommentsByCard((prev) => ({
+            ...prev,
+            [cardId]: (prev[cardId] ?? []).filter((c) => c.id !== tempId),
+          }));
+        });
+    },
+    [],
+  );
+
+  const onDeleteComment = useCallback(
+    (cardId: string, commentId: string) => {
+      setCommentsByCard((prev) => ({
+        ...prev,
+        [cardId]: (prev[cardId] ?? []).filter((c) => c.id !== commentId),
+      }));
+      const supabase = createClient();
+      const repo = createCommentRepository(supabase);
+      void repo.delete(commentId).catch(() => {
+        void loadComments(cardId);
+      });
+    },
+    [loadComments],
+  );
+
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("comments-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "comments",
+        },
+        (payload) => {
+          const comment = toComment(payload.new);
+          if (!comment) return;
+          setCommentsByCard((prev) => ({
+            ...prev,
+            [comment.card_id]: [
+              ...(prev[comment.card_id] ?? []),
+              comment,
+            ],
+          }));
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "comments",
+        },
+        (payload) => {
+          const oldRow = payload.old as { id?: unknown } | undefined;
+          if (!oldRow || typeof oldRow.id !== "string") return;
+          const commentId = oldRow.id;
+          setCommentsByCard((prev) => {
+            const next: Record<string, CardComment[]> = {};
+            for (const [cid, comments] of Object.entries(prev)) {
+              next[cid] = comments.filter((c) => c.id !== commentId);
+            }
+            return next;
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+
 
   const createCard = useCallback(
     async (listId: ListId, title: string) => {
@@ -259,6 +394,72 @@ export function BoardShell({ boardId }: { boardId: string }) {
     [],
   );
 
+function toActivityRow(row: unknown): ActivityEvent | null {
+  if (!row || typeof row !== "object") return null;
+  const r = row as Record<string, unknown>;
+  if (typeof r.id !== "number") return null;
+  if (typeof r.actor_id !== "string") return null;
+  if (typeof r.kind !== "string") return null;
+  if (typeof r.created_at !== "string") return null;
+  const payload = r.payload;
+  const safePayload: Record<string, unknown> =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+  return {
+    id: r.id,
+    actor_id: r.actor_id,
+    kind: r.kind,
+    payload: safePayload,
+    created_at: r.created_at,
+  };
+}
+
+const loadActivity = useCallback(async () => {
+  setActivityLoading(true);
+  try {
+    const supabase = createClient();
+    const repo = createActivityRepository(supabase);
+    const events = await repo.list(boardId, 50);
+    setActivityEvents(events);
+  } finally {
+    setActivityLoading(false);
+  }
+}, [boardId]);
+
+useEffect(() => {
+  void loadActivity();
+}, [loadActivity]);
+
+useEffect(() => {
+  let active = true;
+  const supabase = createClient();
+  const channel = supabase
+    .channel(`activity:${boardId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "activity_events",
+        filter: `board_id=eq.${boardId}`,
+      },
+      (payload: { new: unknown }) => {
+        const event = toActivityRow(payload.new);
+        if (!event || !active) return;
+        setActivityEvents((prev) => {
+          if (prev.some((e) => e.id === event.id)) return prev;
+          return [event, ...prev];
+        });
+      },
+    )
+    .subscribe();
+  return () => {
+    active = false;
+    void supabase.removeChannel(channel);
+  };
+}, [boardId]);
+
   const refresh = useCallback(() => {
     setNotice(null);
     setAddingToListId(null);
@@ -303,6 +504,13 @@ export function BoardShell({ boardId }: { boardId: string }) {
     <div className="flex min-h-[100dvh] flex-col">
       <header className="sticky top-0 z-10 border-b border-border bg-surface px-4 py-3">
         <h1 className="text-lg font-semibold">Board</h1>
+        <button
+          type="button"
+          onClick={() => setActivityPanelOpen((v) => !v)}
+          className="ml-auto rounded border border-border px-3 py-1.5 text-sm hover:bg-surface"
+        >
+          Activity
+        </button>
       </header>
       {notice ? (
         <p role="status" className="border-b border-warning px-4 py-2 text-sm text-warning">
@@ -327,17 +535,29 @@ export function BoardShell({ boardId }: { boardId: string }) {
                       editTitle={editTitle}
                       isPending={isPending(cardState, card.id)}
                       isDraggingOver={dragOverCardId === card.id}
+                      presence={(
+                        (presenceByCard[card.id] ?? []).filter(
+                          (p: CardPresence) => p.user_id !== userIdRef.current,
+                        ).map((p: CardPresence) => p.user_id.slice(0, 8))
+                      )}
                       onEditStart={(target) => {
                         setEditingCardId(target.id);
                         setEditTitle(target.title);
+                        startPresenceEditing(target.id);
                       }}
                       onEditChange={setEditTitle}
                       onEditSave={() => {
                         if (editingCardId) {
+                          stopPresenceEditing(editingCardId);
                           void saveCard(editingCardId, { title: editTitle });
                         }
                       }}
-                      onEditCancel={() => setEditingCardId(null)}
+                      onEditCancel={() => {
+                        if (editingCardId) {
+                          stopPresenceEditing(editingCardId);
+                        }
+                        setEditingCardId(null);
+                      }}
                       onEditLabels={(cardId: string, labels: string[]) =>
                         void onEditLabels(cardId, labels)
                       }
@@ -375,6 +595,14 @@ export function BoardShell({ boardId }: { boardId: string }) {
                           }
                         }
                       }}
+                      comments={commentsByCard[card.id] ?? []}
+                      currentUserId={userIdRef.current}
+                      onAddComment={(body: string) =>
+                        void onAddComment(card.id, body)
+                      }
+                      onDeleteComment={(commentId: string) =>
+                        void onDeleteComment(card.id, commentId)
+                      }
                     />
                   ))}
                 </div>
