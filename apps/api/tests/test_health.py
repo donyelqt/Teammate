@@ -15,8 +15,11 @@ client = TestClient(app)
 def test_health_returns_ok() -> None:
     response = client.get("/health")
 
+    body = response.json()
+    assert body["version"] == "0.1.0"
+    assert body["checks"]["realtime"] == "up"
+    assert body["status"] == "ok"
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
 
 
 def test_unknown_route_returns_404() -> None:
