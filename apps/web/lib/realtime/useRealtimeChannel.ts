@@ -15,7 +15,6 @@ export type RealtimeStatus =
 
 export interface CardRow {
   id: CardId;
-  board_id: BoardId;
   list_id: ListId;
   title: string;
   position: number;
@@ -24,11 +23,16 @@ export interface CardRow {
 export type RealtimeCardEvent =
   | { event: "INSERT"; card: CardRow }
   | { event: "UPDATE"; card: CardRow }
-  | { event: "DELETE"; card: CardRow | null };
+  | { event: "DELETE"; cardId: CardId | null };
 
 export interface UseRealtimeChannelOptions {
   onEvent?: (event: RealtimeCardEvent) => void;
   enabled?: boolean;
+  /**
+   * Lists whose cards this channel should receive. When provided, the
+   * subscription carries a server-side `list_id=in.(...)` filter.
+   */
+  listIds?: readonly ListId[] | undefined;
 }
 
 export interface UseRealtimeChannelResult {
@@ -49,13 +53,11 @@ export function toCardRow(row: unknown): CardRow | null {
   // Row is an object; field-level validity is checked by the guards below.
   const r = row as Record<string, unknown>;
   if (!isCardId(r["id"])) return null;
-  if (!isBoardId(r["board_id"])) return null;
   if (!isListId(r["list_id"])) return null;
   if (typeof r["title"] !== "string") return null;
   if (typeof r["position"] !== "number") return null;
   return {
     id: r["id"],
-    board_id: r["board_id"],
     list_id: r["list_id"],
     title: r["title"],
     position: r["position"],
@@ -63,30 +65,73 @@ export function toCardRow(row: unknown): CardRow | null {
 }
 
 /**
+ * Supabase sends `eventType` as a string ("INSERT", "UPDATE", "DELETE").
+ * Some transports deliver the legacy numeric codes (1, 2, 3). Accept both.
+ */
+export type RealtimeEventKind = "INSERT" | "UPDATE" | "DELETE";
+
+const EVENT_KIND_BY_CODE: Record<number, RealtimeEventKind> = {
+  1: "INSERT",
+  2: "UPDATE",
+  3: "DELETE",
+};
+
+/**
+ * Read the event kind from a postgres_changes payload.
+ * Returns null when the payload carries no recognizable event type.
+ */
+export function toEventKind(payload: unknown): RealtimeEventKind | null {
+  if (!payload || typeof payload !== "object") return null;
+  const raw = (payload as Record<string, unknown>)["eventType"];
+
+  if (typeof raw === "string") {
+    const upper = raw.toUpperCase();
+    if (upper === "INSERT" || upper === "UPDATE" || upper === "DELETE") {
+      return upper;
+    }
+    return null;
+  }
+
+  if (typeof raw === "number") {
+    return EVENT_KIND_BY_CODE[raw] ?? null;
+  }
+
+  return null;
+}
+
+/**
  * Map a realtime postgres_changes payload onto the typed event union.
- * eventType 1 -> INSERT, 2 -> UPDATE, 3 -> DELETE. DELETE has no `new`,
- * so its card comes from `old` (which may itself be absent -> null).
+ *
+ * DELETE carries only the primary key in `old` when the table's replica
+ * identity is not FULL, so deletes resolve to a bare card id.
  */
 export function mapRealtimePayload(
   payload: unknown,
 ): RealtimeCardEvent | null {
-  if (!payload || typeof payload !== "object") return null;
-  // Payload is an object; eventType's number type is verified on the next line.
+  const kind = toEventKind(payload);
+  if (!kind) return null;
+
   const p = payload as Record<string, unknown>;
-  if (typeof p["eventType"] !== "number") return null;
 
-  const eventType = p["eventType"];
+  if (kind === "DELETE") {
+    const oldRow = p["old"];
+    if (!oldRow || typeof oldRow !== "object") {
+      return { event: "DELETE", cardId: null };
+    }
+    const id = (oldRow as Record<string, unknown>)["id"];
+    if (!isCardId(id)) {
+      return { event: "DELETE", cardId: null };
+    }
+    return { event: "DELETE", cardId: id };
+  }
+
   const newRow = toCardRow(p["new"]);
-  const oldRow = toCardRow(p["old"]);
 
-  if (eventType === 1 && newRow) {
+  if (kind === "INSERT" && newRow) {
     return { event: "INSERT", card: newRow };
   }
-  if (eventType === 2 && newRow) {
+  if (kind === "UPDATE" && newRow) {
     return { event: "UPDATE", card: newRow };
-  }
-  if (eventType === 3) {
-    return { event: "DELETE", card: oldRow };
   }
   return null;
 }
@@ -107,6 +152,7 @@ export interface RealtimeSubscriptionDeps {
   boardId: BoardId;
   enabled: boolean;
   hasBoardId: boolean;
+  listIds?: readonly ListId[] | undefined;
   client: SupabaseClient;
   onEvent?: (event: RealtimeCardEvent) => void;
   onStatus: (status: RealtimeStatus) => void;
@@ -132,13 +178,17 @@ export function runRealtimeSubscription(
 
   const channel = deps.client.channel(`realtime:board:${deps.boardId}`);
 
+  const listIds = deps.listIds ?? [];
+  const filter =
+    listIds.length > 0 ? `list_id=in.(${listIds.join(",")})` : undefined;
+
   channel.on(
     "postgres_changes",
     {
-      event: "INSERT",
+      event: "*",
       schema: "public",
       table: "cards",
-      filter: `board_id=eq.${deps.boardId}`,
+      ...(filter ? { filter } : {}),
     },
     (payload: unknown) => {
       const event = mapRealtimePayload(payload);
@@ -189,6 +239,7 @@ export function useRealtimeChannel(
 ): UseRealtimeChannelResult {
   const enabled = options?.enabled ?? true;
   const onEvent = options?.onEvent;
+  const listIds = options?.listIds;
 
   const [status, setStatus] = useState<RealtimeStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -199,12 +250,16 @@ export function useRealtimeChannel(
   clientRef.current = client;
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
+  const listIdsKey = listIds ? listIds.join(",") : "";
+  const listIdsRef = useRef(listIds);
+  listIdsRef.current = listIds;
 
   useEffect(() => {
     const cleanup = runRealtimeSubscription({
       boardId,
       enabled,
       hasBoardId: isBoardId(boardId),
+      listIds: listIdsRef.current,
       client: clientRef.current ?? createClient(),
       onEvent: (event) => {
         onEventRef.current?.(event);
@@ -215,7 +270,7 @@ export function useRealtimeChannel(
     });
     channelRef.current = cleanup;
     return cleanup;
-  }, [boardId, enabled]);
+  }, [boardId, enabled, listIdsKey]);
 
   return {
     status,

@@ -63,7 +63,6 @@ const LIST = toListId("11111111-2222-3333-4444-555555555555");
 function fakeCard(overrides?: Partial<Record<string, unknown>>): Record<string, unknown> {
   return {
     id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-    board_id: BOARD,
     list_id: LIST,
     title: "Card",
     position: 1,
@@ -174,58 +173,124 @@ describe("runRealtimeSubscription lifecycle", () => {
       expect(statuses).toEqual(["idle"]);
     }
   });
+
+  it("scopes the subscription to the given lists", () => {
+    const channel = makeChannel();
+    const client = makeClient(channel);
+    const listA = toListId("11111111-2222-3333-4444-555555555555");
+    const listB = toListId("99999999-8888-7777-6666-555555555555");
+
+    runRealtimeSubscription({
+      boardId: BOARD,
+      enabled: true,
+      hasBoardId: true,
+      listIds: [listA, listB],
+      client: toSupabaseClient(client),
+      onStatus: () => {},
+      onError: () => {},
+      onEventState: () => {},
+    });
+
+    const [, filterConfig] = channel.on.mock.calls[0] as [
+      string,
+      { event: string; table: string; filter?: string },
+    ];
+    expect(filterConfig.event).toBe("*");
+    expect(filterConfig.table).toBe("cards");
+    expect(filterConfig.filter).toBe(`list_id=in.(${listA},${listB})`);
+  });
+
+  it("omits the filter when no lists are known yet", () => {
+    const channel = makeChannel();
+    const client = makeClient(channel);
+
+    runRealtimeSubscription({
+      boardId: BOARD,
+      enabled: true,
+      hasBoardId: true,
+      listIds: [],
+      client: toSupabaseClient(client),
+      onStatus: () => {},
+      onError: () => {},
+      onEventState: () => {},
+    });
+
+    const [, filterConfig] = channel.on.mock.calls[0] as [
+      string,
+      { event: string; table: string; filter?: string },
+    ];
+    expect(filterConfig.filter).toBeUndefined();
+  });
 });
 
 describe("mapRealtimePayload", () => {
-  it("maps eventType 1 to INSERT with the new row", () => {
+  it("maps a string INSERT event type with the new row", () => {
     const card = {
       id: toCardId("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-      board_id: BOARD,
       list_id: LIST,
       title: "New",
       position: 1,
+    };
+
+    expect(mapRealtimePayload({ eventType: "INSERT", new: card, old: {} })).toEqual({
+      event: "INSERT",
+      card,
+    });
+  });
+
+  it("maps a string UPDATE event type with the new row", () => {
+    const card = {
+      id: toCardId("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+      list_id: LIST,
+      title: "Moved",
+      position: 7,
+    };
+
+    expect(mapRealtimePayload({ eventType: "UPDATE", new: card, old: {} })).toEqual({
+      event: "UPDATE",
+      card,
+    });
+  });
+
+  it("maps a DELETE event to the bare card id", () => {
+    const id = toCardId("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+
+    expect(mapRealtimePayload({ eventType: "DELETE", new: {}, old: { id } })).toEqual({
+      event: "DELETE",
+      cardId: id,
+    });
+  });
+
+  it("yields DELETE with a null card id when old carries no id", () => {
+    expect(mapRealtimePayload({ eventType: "DELETE", new: {}, old: {} })).toEqual({
+      event: "DELETE",
+      cardId: null,
+    });
+    expect(mapRealtimePayload({ eventType: "DELETE", new: {}, old: { id: "nope" } })).toEqual({
+      event: "DELETE",
+      cardId: null,
+    });
+  });
+
+  it("still accepts the legacy numeric event codes", () => {
+    const card = {
+      id: toCardId("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+      list_id: LIST,
+      title: "Legacy",
+      position: 2,
     };
 
     expect(mapRealtimePayload({ eventType: 1, new: card, old: {} })).toEqual({
       event: "INSERT",
       card,
     });
-  });
-
-  it("maps eventType 2 to UPDATE with the new row", () => {
-    const card = {
-      id: toCardId("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-      board_id: BOARD,
-      list_id: LIST,
-      title: "Moved",
-      position: 7,
-    };
-
     expect(mapRealtimePayload({ eventType: 2, new: card, old: {} })).toEqual({
       event: "UPDATE",
       card,
     });
-  });
-
-  it("maps eventType 3 to DELETE taking the card from old", () => {
-    const card = {
-      id: toCardId("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-      board_id: BOARD,
-      list_id: LIST,
-      title: "Gone",
-      position: 3,
-    };
-
-    expect(mapRealtimePayload({ eventType: 3, new: {}, old: card })).toEqual({
+    expect(mapRealtimePayload({ eventType: 3, new: {}, old: { id: card.id } })).toEqual({
       event: "DELETE",
-      card,
-    });
-  });
-
-  it("yields DELETE with a null card when old is absent", () => {
-    expect(mapRealtimePayload({ eventType: 3, new: {}, old: {} })).toEqual({
-      event: "DELETE",
-      card: null,
+      cardId: card.id,
     });
   });
 
@@ -233,7 +298,7 @@ describe("mapRealtimePayload", () => {
     expect(mapRealtimePayload(null)).toBeNull();
     expect(mapRealtimePayload({ eventType: "1", new: {} })).toBeNull();
     expect(mapRealtimePayload({ eventType: 9, new: fakeCard(), old: {} })).toBeNull();
-    expect(mapRealtimePayload({ eventType: 1, new: {}, old: {} })).toBeNull();
+    expect(mapRealtimePayload({ eventType: "INSERT", new: {}, old: {} })).toBeNull();
   });
 });
 
@@ -267,13 +332,12 @@ describe("registered handler forwards mapped events to onEvent", () => {
     const handler = captureHandler(channel);
     const card = {
       id: toCardId("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-      board_id: BOARD,
       list_id: LIST,
       title: "New",
       position: 1,
     };
 
-    handler({ eventType: 1, new: card, old: {} });
+    handler({ eventType: "INSERT", new: card, old: {} });
 
     expect(onEvent).toHaveBeenCalledTimes(1);
     expect(onEvent).toHaveBeenCalledWith({ event: "INSERT", card });
@@ -299,18 +363,17 @@ describe("registered handler forwards mapped events to onEvent", () => {
     const handler = captureHandler(channel);
     const card = {
       id: toCardId("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-      board_id: BOARD,
       list_id: LIST,
       title: "Moved",
       position: 9,
     };
 
-    handler({ eventType: 2, new: card, old: {} });
+    handler({ eventType: "UPDATE", new: card, old: {} });
 
     expect(onEvent).toHaveBeenCalledWith({ event: "UPDATE", card });
   });
 
-  it("DELETE payload reaches onEvent with the old row as the card", () => {
+  it("DELETE payload reaches onEvent with the bare card id", () => {
     const channel = makeChannel();
     const client = makeClient(channel);
     const onEvent = vi.fn();
@@ -327,17 +390,11 @@ describe("registered handler forwards mapped events to onEvent", () => {
     });
 
     const handler = captureHandler(channel);
-    const card = {
-      id: toCardId("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-      board_id: BOARD,
-      list_id: LIST,
-      title: "Gone",
-      position: 3,
-    };
+    const id = toCardId("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
 
-    handler({ eventType: 3, new: {}, old: card });
+    handler({ eventType: "DELETE", new: {}, old: { id } });
 
-    expect(onEvent).toHaveBeenCalledWith({ event: "DELETE", card });
+    expect(onEvent).toHaveBeenCalledWith({ event: "DELETE", cardId: id });
   });
 
   it("does not call onEvent for payloads that do not map", () => {

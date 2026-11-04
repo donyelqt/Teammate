@@ -30,3 +30,6 @@ Thumbs.db
 *.log
 .vercel
 .turbo
+
+# test scripts (contain local dev tokens)
+apps/web/scripts/

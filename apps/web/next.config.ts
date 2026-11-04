@@ -18,6 +18,17 @@ const nextConfig: NextConfig = {
   eslint: {
     dirs: ["src", "app", "components", "lib"],
   },
+
+  // `@teammate/shared` ships TypeScript sources that use `.js` specifiers for
+  // ESM correctness. Webpack must map those back onto the `.ts` files.
+  webpack: (config) => {
+    config.resolve.extensionAlias = {
+      ".js": [".ts", ".tsx", ".js"],
+      ".mjs": [".mts", ".mjs"],
+      ".cjs": [".cts", ".cjs"],
+    };
+    return config;
+  },
 };
 
 export default nextConfig;

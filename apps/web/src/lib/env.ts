@@ -21,7 +21,13 @@ function readPublicEnv(): Record<string, string | undefined> {
   const source =
     typeof process !== "undefined" && process.env ? process.env : {};
   assertNoPublicSecret(source);
-  return source;
+
+  // Next inlines `process.env.NEXT_PUBLIC_*` only for static member access.
+  // A dynamic `source[key]` lookup stays undefined in the browser bundle.
+  return {
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  };
 }
 
 export type PublicEnv = {
