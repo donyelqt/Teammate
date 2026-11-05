@@ -106,6 +106,10 @@ jobs:
         working-directory: apps/api
         run: uv sync --frozen
 
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
       - name: Start local Supabase
         run: supabase start
 
