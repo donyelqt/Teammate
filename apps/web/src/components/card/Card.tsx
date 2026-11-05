@@ -53,7 +53,6 @@ export function CardItem({
   onDeleteComment,
 }: CardItemProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [dragOver, setDragOver] = useState(false);
   const [editingLabels, setEditingLabels] = useState(false);
   const [editingAssignees, setEditingAssignees] = useState(false);
   const [editingDueDate, setEditingDueDate] = useState(false);
@@ -72,15 +71,12 @@ export function CardItem({
       onDragOver={(e) => {
         e.preventDefault();
         onDragOver(card.id);
-        setDragOver(true);
       }}
       onDragLeave={() => {
         onDragLeave();
-        setDragOver(false);
       }}
       onDrop={() => {
         onDrop(card.id, card.id);
-        setDragOver(false);
       }}
       className={`group relative rounded-lg border-2 border-border bg-surface p-3 shadow-brutal transition-all duration-150 hover:-translate-y-0.5 hover:shadow-brutal-sm ${
         isDraggingOver ? "ring-2 ring-accent ring-offset-2" : ""
