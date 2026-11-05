@@ -106,8 +106,13 @@ jobs:
         working-directory: apps/api
         run: uv sync --frozen
 
+      - name: Start local Supabase
+        run: supabase start
+
       - name: Run tests
         working-directory: apps/api
+        env:
+          TEAMMATE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
         run: uv run pytest -q
 
       - name: Typecheck
