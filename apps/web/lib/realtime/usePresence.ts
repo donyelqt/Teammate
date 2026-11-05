@@ -31,7 +31,7 @@ export type PresenceRepositoryRef = ReturnType<
 export function usePresence(
   options: UsePresenceOptions,
 ): UsePresenceResult {
-  const { boardId, cardId, intervalMs = 30000, ttlMs = 120000 } = options;
+  const { boardId, intervalMs = 30000, ttlMs = 120000 } = options;
 
   const [presenceByCard, setPresenceByCard] = useState<
     Record<string, CardPresence[]>
@@ -41,7 +41,7 @@ export function usePresence(
   const userIdRef = useRef<UserId | null>(null);
   const sessionRef = useRef<string>("");
   const repoRef = useRef<PresenceRepositoryRef | null>(null);
-  const channelRef = useRef<(() => void) | null>(null);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Resolve current user id once on mount
@@ -198,11 +198,12 @@ export function usePresence(
 
   // Cleanup on unmount: delete our session's rows, unsubscribe
   useEffect(() => {
+    const editing = editingRef.current;
     return () => {
       const repo = repoRef.current;
       const session = sessionRef.current;
       if (repo && session) {
-        for (const cid of editingRef.current) {
+        for (const cid of editing) {
           void repo.delete(cid, session);
         }
       }
