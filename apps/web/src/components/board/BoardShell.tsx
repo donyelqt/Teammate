@@ -24,8 +24,7 @@ import {
   toComment,
   type CardComment,
 } from "@/lib/cards/commentRepository";
-import { Comments } from "@/components/card/Comments";
-import { ActivityPanel, type ActivityEvent } from "@/components/board/ActivityPanel";
+import { type ActivityEvent } from "@/components/board/ActivityPanel";
 import {
   usePresence,
   type CardPresence,
@@ -63,7 +62,7 @@ export function BoardShell({ boardId }: { boardId: string }) {
   const [addTitle, setAddTitle] = useState("");
   const [editingCardId, setEditingCardId] = useState<CardId | null>(null);
   const [editTitle, setEditTitle] = useState("");
-  const [dragOverCardId, setDragOverCardId] = useState<CardId | null>(null);
+  const [_dragOverCardId, setDragOverCardId] = useState<CardId | null>(null);
   const draggedCardIdRef = useRef<CardId | null>(null);
 
   const listIdsRef = useRef<ListId[]>([]);
@@ -72,9 +71,9 @@ export function BoardShell({ boardId }: { boardId: string }) {
   );
   const userIdRef = useRef<UserId | null>(null);
   const [commentsByCard, setCommentsByCard] = useState<Record<string, CardComment[]>>({});
-  const [activityEvents, setActivityEvents] = useState<ActivityEvent[]>([]);
-  const [activityLoading, setActivityLoading] = useState(false);
-  const [activityPanelOpen, setActivityPanelOpen] = useState(false);
+  const [_activityEvents, setActivityEvents] = useState<ActivityEvent[]>([]);
+  const [_activityLoading, setActivityLoading] = useState(false);
+  const [_activityPanelOpen, setActivityPanelOpen] = useState(false);
 
   const load = useCallback(async () => {
     const supabase = createClient();
@@ -534,7 +533,7 @@ useEffect(() => {
                       editing={editingCardId === card.id}
                       editTitle={editTitle}
                       isPending={isPending(cardState, card.id)}
-                      isDraggingOver={dragOverCardId === card.id}
+                      isDraggingOver={_dragOverCardId === card.id}
                       presence={(
                         (presenceByCard[card.id] ?? []).filter(
                           (p: CardPresence) => p.user_id !== userIdRef.current,
