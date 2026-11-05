@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { CardId, ListId } from "@teammate/shared";
-import { isCardId, isListId } from "@teammate/shared";
+import { isCardId } from "@teammate/shared";
 import { cardReducer, createCardState, isPending, type Card } from "./cardReducer";
 
 function toCardId(raw: string): CardId {
@@ -8,10 +8,6 @@ function toCardId(raw: string): CardId {
 	return raw as CardId;
 }
 
-function toListId(raw: string): ListId {
-	if (!isListId(raw)) throw new Error("invalid list id");
-	return raw as ListId;
-}
 
 const LIST: ListId = "11111111-2222-3333-4444-555555555555" as ListId;
 

@@ -11,11 +11,11 @@ from __future__ import annotations
 import importlib
 import sys
 import tomllib
+from collections.abc import Generator
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-
 
 # Modules that exist only inside the Cloudflare Workers Pyodide runtime
 # and must be mocked in a host venv.
@@ -24,7 +24,7 @@ _PYODIDE_MOCKS = ("js", "_pyodide_entrypoint_helper",
 
 
 @pytest.fixture(autouse=True, scope="module")
-def _mock_pyodide_modules() -> None:
+def _mock_pyodide_modules() -> Generator[None]:
     saved = {k: sys.modules.get(k) for k in _PYODIDE_MOCKS}
     for name in saved:
         sys.modules[name] = MagicMock()
@@ -52,6 +52,7 @@ def _import_name(dist_name: str) -> str:
         "workers-py": "workers",
         "workers-runtime-sdk": "workers",
         "python-ulid": "ulid",
+        "PyJWT": "jwt",
     }
     if dist_name in mapping:
         return mapping[dist_name]

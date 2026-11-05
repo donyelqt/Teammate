@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from typing import Annotated
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -54,13 +55,13 @@ def _verify_token(token: str) -> uuid.UUID:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token expired.",
-        )
+        ) from None
     except jwt.PyJWTError as exc:
         log.debug("JWT verification failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token.",
-        )
+        ) from exc
 
     sub = payload.get("sub")
     if not isinstance(sub, str):
@@ -74,11 +75,13 @@ def _verify_token(token: str) -> uuid.UUID:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token subject is not a UUID.",
-        )
+        ) from None
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)
+    ],
 ) -> AuthUser:
     """Require a valid bearer token. 401 on missing or invalid token."""
     if credentials is None or credentials.scheme.lower() != "bearer":
@@ -90,7 +93,9 @@ async def get_current_user(
 
 
 async def get_optional_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)
+    ],
 ) -> AuthUser | None:
     """Like `get_current_user` but returns None instead of raising."""
     if credentials is None or credentials.scheme.lower() != "bearer":

@@ -7,9 +7,8 @@ RLS on insert). Deletion is allowed for the author or a workspace admin/owner
 
 from __future__ import annotations
 
-import uuid
-
 import logging
+import uuid
 from typing import Annotated
 
 import asyncpg
@@ -135,7 +134,7 @@ async def delete_comment(
 ):
     await set_user(conn, str(user.id))
     row = await conn.fetchrow(
-        f"SELECT id FROM comments WHERE id = $1", comment_id
+        "SELECT id FROM comments WHERE id = $1", comment_id
     )
     if row is None:
         raise HTTPException(

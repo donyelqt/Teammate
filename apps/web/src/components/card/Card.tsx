@@ -53,13 +53,7 @@ export function CardItem({
   onDeleteComment,
 }: CardItemProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const [editingLabels, setEditingLabels] = useState(false);
-  const [editingAssignees, setEditingAssignees] = useState(false);
-  const [editingDueDate, setEditingDueDate] = useState(false);
-  const [labelInput, setLabelInput] = useState("");
-  const [assigneeInput, setAssigneeInput] = useState("");
-  const [dueDate, setDueDate] = useState(card.due_at || "");
+  const [_dragOver, setDragOver] = useState(false);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -287,14 +281,17 @@ export function AddCard({
         onAddCancel();
       }
     },
-    [onAddSubmit, onAddCancel],
+    [onAddStart, onAddSubmit, onAddCancel],
   );
 
   if (!adding) {
     return (
       <button
         type="button"
-        onClick={() => onAddChange("")}
+        onClick={() => {
+          onAddStart();
+          onAddChange("");
+        }}
           className="w-full rounded-md border border-dashed border-border px-2 py-1.5 text-sm text-muted hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
       >
         + Add a card

@@ -8,8 +8,6 @@ import {
 } from "react";
 
 import {
-  isWorkspaceId,
-  isWorkspaceRole,
   type WorkspaceId,
   type WorkspaceRole,
 } from "@teammate/shared";
@@ -69,9 +67,6 @@ export function WorkspaceSwitcher({
     }
   }, [createName, createSlug]);
 
-  const handleToggle = useCallback(() => {
-    setIsOpen((prev) => !prev);
-  }, []);
 
   const handleSelect = useCallback(
     (id: WorkspaceId) => {
@@ -128,15 +123,7 @@ export function WorkspaceSwitcher({
     [isOpen, showCreateForm, workspaces, focusedIndex, handleSelect],
   );
 
-  const handleTriggerKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLButtonElement>) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        handleToggle();
-      }
-    },
-    [handleToggle],
-  );
+
 
   const handleCreateKeyDown = useCallback(
     (e: KeyboardEvent<HTMLFormElement>) => {

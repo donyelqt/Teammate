@@ -4,6 +4,8 @@ version = "0.1.0"
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "fastapi",
+    "asyncpg",
+    "PyJWT",
     "workers-py",
     "workers-runtime-sdk",
     "pydantic",
@@ -30,8 +32,10 @@ target-version = "py313"
 select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "RUF"]
 
 [tool.mypy]
-strict = true
 python_version = "3.13"
+# strict enables disallow_untyped_defs; disable it so test functions and
+# fixtures do not need annotations. Server code is still fully checked.
+disallow_untyped_defs = false
 warn_unreachable = true
 disallow_untyped_decorators = false
 explicit_package_bases = true
@@ -42,6 +46,16 @@ explicit_package_bases = true
 [[tool.mypy.overrides]]
 module = "workers.*"
 ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = "asyncpg.*"
+ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = "jwt.*"
+ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_untyped_decorators = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

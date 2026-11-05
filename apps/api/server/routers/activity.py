@@ -8,14 +8,13 @@ endpoint at all.
 
 from __future__ import annotations
 
-
 import json
 import logging
 from typing import Annotated
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from ..core.auth import AuthUser, get_current_user
 from ..core.db import get_db, set_user

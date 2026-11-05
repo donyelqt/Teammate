@@ -25,7 +25,6 @@ from collections.abc import AsyncIterator
 import asyncpg
 import httpx
 import jwt
-import pytest
 import pytest_asyncio
 
 from server.core.db import get_db
@@ -134,15 +133,15 @@ async def seeded(db_conn: asyncpg.Connection) -> dict[str, str]:
 
 
 __all__ = [
-    "OWNER",
+    "BOARD_ID",
     "MEMBER",
     "OUTSIDER",
+    "OWNER",
     "WORKSPACE_ID",
-    "BOARD_ID",
-    "make_token",
     "auth_header",
     "client",
     "db_conn",
     "db_pool",
+    "make_token",
     "seeded",
 ]
