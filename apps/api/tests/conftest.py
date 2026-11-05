@@ -101,7 +101,6 @@ async def client(db_conn: asyncpg.Connection) -> AsyncIterator[httpx.AsyncClient
 @pytest_asyncio.fixture
 async def seeded(db_conn: asyncpg.Connection) -> dict[str, str]:
     """A board owned by OWNER, with one list, one card, and one comment."""
-    )
 
     list_id = uuid.uuid4()
     card_id = uuid.uuid4()
