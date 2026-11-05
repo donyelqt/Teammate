@@ -7,9 +7,8 @@ handler only needs to set the principal and run the query.
 
 from __future__ import annotations
 
-import uuid
-
 import logging
+import uuid
 from typing import Annotated
 
 import asyncpg
@@ -112,9 +111,9 @@ async def list_cards_in_board(
             status_code=status.HTTP_404_NOT_FOUND, detail="Board not found."
         )
     rows = await conn.fetch(
-        f"SELECT c.id, c.list_id, c.title, c.description, c.position, "
-        f"c.assignee_ids, c.due_at::text, c.labels, c.archived_at::text, "
-        f"c.created_by, c.created_at::text, c.updated_at::text "
+        "SELECT c.id, c.list_id, c.title, c.description, c.position, "
+        "c.assignee_ids, c.due_at::text, c.labels, c.archived_at::text, "
+        "c.created_by, c.created_at::text, c.updated_at::text "
         "FROM cards c JOIN lists l ON l.id = c.list_id "
         "WHERE l.board_id = $1 "
         "ORDER BY l.position, c.position",

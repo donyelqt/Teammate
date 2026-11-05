@@ -13,7 +13,6 @@ pooled connection never leaks the previous request's principal into the next.
 from __future__ import annotations
 
 import asyncpg
-from fastapi import Depends
 
 from .config import get_settings
 
@@ -74,4 +73,4 @@ async def set_user(conn: asyncpg.Connection, user_id: str) -> None:
     )
 
 
-__all__ = ["get_db", "get_db_pool", "close_db_pool", "set_user"]
+__all__ = ["close_db_pool", "get_db", "get_db_pool", "set_user"]
