@@ -101,9 +101,6 @@ async def client(db_conn: asyncpg.Connection) -> AsyncIterator[httpx.AsyncClient
 @pytest_asyncio.fixture
 async def seeded(db_conn: asyncpg.Connection) -> dict[str, str]:
     """A board owned by OWNER, with one list, one card, and one comment."""
-    await db_conn.execute("SET ROLE authenticated")
-    await db_conn.execute(
-        "SELECT set_config('request.jwt.claim.sub', $1, true)", str(OWNER)
     )
 
     list_id = uuid.uuid4()
@@ -121,6 +118,11 @@ async def seeded(db_conn: asyncpg.Connection) -> dict[str, str]:
     await db_conn.execute(
         "INSERT INTO comments (id, card_id, author_id, body) VALUES ($1, $2, $3, $4)",
         comment_id, card_id, str(OWNER), "Looks good.",
+    )
+
+    await db_conn.execute("SET ROLE authenticated")
+    await db_conn.execute(
+        "SELECT set_config('request.jwt.claim.sub', $1, true)", str(OWNER)
     )
 
     return {
