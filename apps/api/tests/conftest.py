@@ -107,6 +107,23 @@ async def seeded(db_conn: asyncpg.Connection) -> dict[str, str]:
     comment_id = uuid.uuid4()
 
     await db_conn.execute(
+        "INSERT INTO workspaces (id, name, slug) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+        WORKSPACE_ID, "Test Workspace", "test-workspace",
+    )
+    await db_conn.execute(
+        "INSERT INTO boards (id, workspace_id, name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+        BOARD_ID, WORKSPACE_ID, "Test Board",
+    )
+    await db_conn.execute(
+        "INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+        WORKSPACE_ID, OWNER, "owner",
+    )
+    await db_conn.execute(
+        "INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+        WORKSPACE_ID, MEMBER, "member",
+    )
+
+    await db_conn.execute(
         "INSERT INTO lists (id, board_id, name) VALUES ($1, $2, $3)",
         list_id, BOARD_ID, "Backlog",
     )
