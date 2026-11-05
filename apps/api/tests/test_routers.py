@@ -12,10 +12,6 @@ just as surely as a broken handler would.
 
 from __future__ import annotations
 
-import uuid
-
-import pytest
-
 from .conftest import (
     BOARD_ID,
     MEMBER,
