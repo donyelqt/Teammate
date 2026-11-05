@@ -13,6 +13,7 @@ so the entrypoint can be exercised in CI.
 from __future__ import annotations
 
 import sys
+from collections.abc import Generator
 from unittest.mock import MagicMock
 
 import httpx
@@ -20,7 +21,7 @@ import pytest
 
 
 @pytest.fixture(autouse=True, scope="module")
-def _mock_pyodide_modules() -> None:
+def _mock_pyodide_modules() -> Generator[None]:
     """Provide stub modules for Pyodide/Cloudflare runtime dependencies."""
     saved = {
         k: sys.modules.get(k)
