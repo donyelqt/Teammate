@@ -471,19 +471,26 @@ useEffect(() => {
   if (loading) {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center">
-        <p className="text-muted">Loading board…</p>
+        <p className="text-sm font-bold uppercase tracking-widest text-muted">
+          Loading board…
+        </p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-3">
-        <p className="text-error">{error}</p>
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4">
+        <p
+          role="alert"
+          className="max-w-md rounded-md border-2 border-error bg-surface px-4 py-3 text-sm font-bold text-error shadow-brutal-sm"
+        >
+          {error}
+        </p>
         <button
           type="button"
           onClick={refresh}
-          className="rounded border border-border px-3 py-1.5 text-sm hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+          className="rounded-md border-2 border-border bg-accent px-4 py-2 text-sm font-extrabold text-accent-foreground shadow-brutal transition-all hover:-translate-y-0.5 hover:shadow-brutal-sm active:translate-y-0 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
           Retry
         </button>
@@ -494,25 +501,32 @@ useEffect(() => {
   if (lists.length === 0) {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center">
-        <p className="text-muted">No lists yet. Add one to get started.</p>
+        <p className="text-sm font-bold uppercase tracking-widest text-muted">
+          No lists yet. Add one to get started.
+        </p>
       </div>
     );
   }
 
   return (
     <div className="flex min-h-[100dvh] flex-col">
-      <header className="sticky top-0 z-10 border-b border-border bg-surface px-4 py-3">
-        <h1 className="text-lg font-semibold">Board</h1>
+      <header className="sticky top-0 z-10 flex items-center border-b-4 border-border bg-surface px-4 py-3 shadow-brutal-sm">
+        <h1 className="text-lg font-extrabold tracking-tight text-surface-foreground">
+          Board
+        </h1>
         <button
           type="button"
           onClick={() => setActivityPanelOpen((v) => !v)}
-          className="ml-auto rounded border border-border px-3 py-1.5 text-sm hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+          className="ml-auto rounded-md border-2 border-border bg-surface-2 px-3 py-1.5 text-xs font-bold text-surface-foreground transition-all hover:-translate-y-0.5 hover:shadow-brutal-sm active:translate-y-0 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
           Activity
         </button>
       </header>
       {notice ? (
-        <p role="status" className="border-b border-warning px-4 py-2 text-sm text-warning">
+        <p
+          role="status"
+          className="border-b-4 border-warning bg-surface px-4 py-2 text-sm font-bold text-warning"
+        >
           {notice}
         </p>
       ) : null}
@@ -523,8 +537,13 @@ useEffect(() => {
               (card) => card.list_id === list.id,
             );
             return (
-              <section key={list.id} className="w-72 shrink-0 rounded-lg bg-surface p-3">
-                <h2 className="mb-2 font-medium">{list.name}</h2>
+              <section
+                key={list.id}
+                className="w-72 shrink-0 rounded-xl border-2 border-border bg-surface p-3 shadow-brutal"
+              >
+                <h2 className="mb-2 text-base font-extrabold tracking-tight text-surface-foreground">
+                  {list.name}
+                </h2>
                 <div className="flex flex-col gap-2">
                   {cards.map((card) => (
                     <CardItem
