@@ -107,20 +107,22 @@ async def seeded(db_conn: asyncpg.Connection) -> dict[str, str]:
     comment_id = uuid.uuid4()
 
     await db_conn.execute(
-        "INSERT INTO workspaces (id, name, slug) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
-        WORKSPACE_ID, "Test Workspace", "test-workspace",
+        "INSERT INTO workspaces (id, name, slug, created_by) VALUES ($1, $2, $3, $4)"
+        " ON CONFLICT DO NOTHING",
+        WORKSPACE_ID, "Test Workspace", "test-workspace", str(OWNER),
     )
     await db_conn.execute(
-        "INSERT INTO boards (id, workspace_id, name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
-        BOARD_ID, WORKSPACE_ID, "Test Board",
+        "INSERT INTO boards (id, workspace_id, name, created_by) VALUES ($1, $2, $3, $4)"
+        " ON CONFLICT DO NOTHING",
+        BOARD_ID, WORKSPACE_ID, "Test Board", str(OWNER),
     )
     await db_conn.execute(
-        "INSERT INTO workspace_members (workspace_id, user_id, role) VALUES (, , )"
+        "INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, $3)"
         " ON CONFLICT DO NOTHING",
         WORKSPACE_ID, OWNER, "owner",
     )
     await db_conn.execute(
-        "INSERT INTO workspace_members (workspace_id, user_id, role) VALUES (, , )"
+        "INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, $3)"
         " ON CONFLICT DO NOTHING",
         WORKSPACE_ID, MEMBER, "member",
     )
