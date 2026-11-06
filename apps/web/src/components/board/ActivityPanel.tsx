@@ -71,33 +71,35 @@ export function ActivityPanel({
   }, [events.length]);
 
   return (
-    <div className="fixed right-0 top-0 z-20 flex h-full w-80 max-w-[80vw] flex-col border-l border-border bg-surface shadow-lg">
+    <div className="fixed right-0 top-0 z-20 flex h-full w-80 max-w-[80vw] flex-col border-l-4 border-border bg-surface shadow-brutal">
       <div
-        className={`flex items-center justify-between border-b border-border px-4 py-3 transition-[padding] duration-200 ${topHidden ? "py-1.5" : "py-3"}`}
+        className={`flex items-center justify-between border-b-4 border-border bg-surface-2 px-4 transition-[padding] duration-200 ${topHidden ? "py-1.5" : "py-3"}`}
       >
-        <h2 className="text-sm font-semibold">Activity</h2>
+        <h2 className="text-sm font-extrabold uppercase tracking-widest text-surface-foreground">
+          Activity
+        </h2>
         <button
           type="button"
           onClick={onClose}
-          className="rounded p-1 text-muted hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+          className="rounded-md p-1 font-bold text-muted transition-colors hover:bg-surface hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
           aria-label="Close activity panel"
         >
           ✕
         </button>
       </div>
-      <div className="flex items-center gap-2 border-b border-border px-4 py-2">
+      <div className="flex items-center gap-2 border-b-4 border-border px-4 py-2">
         <button
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className="rounded border border-border px-2 py-1 text-xs hover:bg-surface-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+          className="rounded-md border-2 border-border bg-surface px-2 py-1 text-xs font-bold text-surface-foreground transition-all hover:-translate-y-0.5 hover:shadow-brutal-sm active:translate-y-0 active:shadow-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
           {loading ? "Refreshing…" : "Refresh"}
         </button>
       </div>
       <ul
         ref={listRef}
-        className="flex-1 overflow-y-auto divide-y divide-border"
+        className="flex-1 overflow-y-auto divide-y-2 divide-border"
       >
         {loading ? (
           <>
@@ -110,19 +112,19 @@ export function ActivityPanel({
             ))}
           </>
         ) : events.length === 0 ? (
-          <li className="px-4 py-8 text-center text-sm text-muted">
+          <li className="px-4 py-8 text-center text-sm font-bold uppercase tracking-widest text-muted">
             No activity yet.
           </li>
         ) : (
           events.map((event) => (
             <li key={event.id} className="flex items-center gap-3 px-4 py-3">
-              <span className="w-16 shrink-0 text-xs text-muted">
+              <span className="w-16 shrink-0 text-xs font-bold text-muted">
                 {relativeTime(event.created_at)}
               </span>
-              <span className="shrink-0 text-xs text-muted">
+              <span className="shrink-0 rounded-full border border-border bg-accent px-2 py-0.5 text-[10px] font-bold text-accent-foreground">
                 {actorLabel(event)}
               </span>
-              <span className="min-w-0 flex-1 truncate text-sm">
+              <span className="min-w-0 flex-1 truncate text-sm font-bold text-surface-foreground">
                 {event.kind}
               </span>
               <span className="shrink-0 text-xs text-muted">
