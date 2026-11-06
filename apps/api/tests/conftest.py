@@ -43,6 +43,9 @@ OWNER = uuid.UUID("531eadaa-47b5-4b1e-9d77-30568165b879")
 MEMBER = uuid.UUID("07299273-9c7c-48ce-9455-d05507f48a8c")
 OUTSIDER = uuid.UUID("33333333-3333-3333-3333-333333333333")
 
+# auth.users.instance_id. Matches the all-zeroes value policies.sql uses.
+INSTANCE_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
+
 # Workspace `fa2943df...` is owned by OWNER and has MEMBER as a member.
 WORKSPACE_ID = uuid.UUID("fa2943df-e8bb-4d60-b8e2-dd6df6e03931")
 BOARD_ID = uuid.UUID("d7462dfb-36b2-4cbe-a3ae-20899121575c")
@@ -105,6 +108,33 @@ async def seeded(db_conn: asyncpg.Connection) -> dict[str, str]:
     list_id = uuid.uuid4()
     card_id = uuid.uuid4()
     comment_id = uuid.uuid4()
+
+    # The principals must exist before anything can reference them. The
+    # workspaces, boards, cards, comments, and activity tables all carry a
+    # not null FK to auth.users, so inserting those rows first fails with a
+    # ForeignKeyViolation. This mirrors what policies.sql does with
+    # fixture identities, matched to the UUIDs this module declares.
+    await db_conn.execute(
+        "INSERT INTO auth.users"
+        " (id, email, instance_id, aud, role, encrypted_password, created_at, updated_at)"
+        " VALUES ($1, $2, $3, 'authenticated', 'authenticated', 'x', now(), now())"
+        " ON CONFLICT (id) DO NOTHING",
+        OWNER, "owner@example.test", INSTANCE_ID,
+    )
+    await db_conn.execute(
+        "INSERT INTO auth.users"
+        " (id, email, instance_id, aud, role, encrypted_password, created_at, updated_at)"
+        " VALUES ($1, $2, $3, 'authenticated', 'authenticated', 'x', now(), now())"
+        " ON CONFLICT (id) DO NOTHING",
+        MEMBER, "member@example.test", INSTANCE_ID,
+    )
+    await db_conn.execute(
+        "INSERT INTO auth.users"
+        " (id, email, instance_id, aud, role, encrypted_password, created_at, updated_at)"
+        " VALUES ($1, $2, $3, 'authenticated', 'authenticated', 'x', now(), now())"
+        " ON CONFLICT (id) DO NOTHING",
+        OUTSIDER, "outsider@example.test", INSTANCE_ID,
+    )
 
     await db_conn.execute(
         "INSERT INTO workspaces (id, name, slug, created_by) VALUES ($1, $2, $3, $4)"
